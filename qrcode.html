@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lecteur QR Code local</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#131a2e;
+      --panel-2:#0f1628;
+      --text:#eef2ff;
+      --muted:#9aa4bd;
+      --border:#27314c;
+      --accent:#6ea8fe;
+      --accent-2:#8b5cf6;
+      --ok:#22c55e;
+      --warn:#f59e0b;
+      --danger:#ef4444;
+      --shadow:0 18px 50px rgba(0,0,0,.35);
+      --radius:18px;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(110,168,254,.18), transparent 35%),
+        radial-gradient(circle at top right, rgba(139,92,246,.14), transparent 30%),
+        var(--bg);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:32px;
+    }
+
+    .app{
+      width:min(980px,100%);
+      display:grid;
+      gap:20px;
+    }
+
+    .hero{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:20px;
+      flex-wrap:wrap;
+    }
+
+    h1{
+      margin:0 0 8px;
+      font-size:clamp(28px,5vw,48px);
+      letter-spacing:-.04em;
+    }
+
+    .subtitle{
+      margin:0;
+      color:var(--muted);
+      max-width:720px;
+      line-height:1.55;
+    }
+
+    .badge{
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.04);
+      color:#cbd5e1;
+      border-radius:999px;
+      padding:8px 12px;
+      font-size:13px;
+      white-space:nowrap;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:1.05fr .95fr;
+      gap:20px;
+    }
+
+    @media (max-width:820px){
+      .grid{grid-template-columns:1fr}
+    }
+
+    .card{
+      background:linear-gradient(180deg,rgba(19,26,46,.95),rgba(15,22,40,.95));
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+
+    .card-body{padding:20px}
+
+    .dropzone{
+      min-height:360px;
+      border:2px dashed #3b4769;
+      border-radius:16px;
+      display:grid;
+      place-items:center;
+      text-align:center;
+      padding:24px;
+      transition:.2s ease;
+      position:relative;
+      overflow:hidden;
+      background:rgba(255,255,255,.015);
+    }
+
+    .dropzone.drag{
+      border-color:var(--accent);
+      background:rgba(110,168,254,.08);
+      transform:translateY(-1px);
+    }
+
+    .dropzone.has-image{
+      border-style:solid;
+      padding:12px;
+    }
+
+    .empty{
+      display:grid;
+      gap:14px;
+      justify-items:center;
+      color:var(--muted);
+    }
+
+    .icon{
+      width:72px;height:72px;
+      border-radius:20px;
+      display:grid;place-items:center;
+      background:linear-gradient(135deg,rgba(110,168,254,.16),rgba(139,92,246,.16));
+      border:1px solid var(--border);
+      font-size:34px;
+    }
+
+    .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:center;
+    }
+
+    button,.file-btn{
+      appearance:none;
+      border:0;
+      border-radius:12px;
+      padding:11px 14px;
+      font-weight:700;
+      cursor:pointer;
+      font:inherit;
+      transition:.15s ease;
+    }
+
+    .primary{
+      color:white;
+      background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    }
+
+    .secondary{
+      color:var(--text);
+      background:#1b2540;
+      border:1px solid #34405f;
+    }
+
+    button:hover,.file-btn:hover{transform:translateY(-1px)}
+    button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+    input[type=file]{display:none}
+
+    #preview{
+      max-width:100%;
+      max-height:560px;
+      display:none;
+      border-radius:10px;
+      object-fit:contain;
+      background:white;
+    }
+
+    .side{
+      display:grid;
+      gap:14px;
+      align-content:start;
+    }
+
+    .section-title{
+      font-size:14px;
+      color:#cbd5e1;
+      font-weight:800;
+      letter-spacing:.02em;
+      text-transform:uppercase;
+    }
+
+    .status{
+      border-radius:14px;
+      padding:12px 14px;
+      border:1px solid var(--border);
+      background:#11182a;
+      color:var(--muted);
+      line-height:1.45;
+    }
+
+    .status.ok{border-color:rgba(34,197,94,.35); color:#bbf7d0; background:rgba(34,197,94,.08)}
+    .status.warn{border-color:rgba(245,158,11,.35); color:#fde68a; background:rgba(245,158,11,.08)}
+    .status.err{border-color:rgba(239,68,68,.35); color:#fecaca; background:rgba(239,68,68,.08)}
+
+    textarea{
+      width:100%;
+      min-height:180px;
+      resize:vertical;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:#0b1222;
+      color:var(--text);
+      padding:14px;
+      font:500 14px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      outline:none;
+    }
+
+    .meta{
+      display:grid;
+      gap:8px;
+      font-size:14px;
+      color:var(--muted);
+    }
+
+    .meta strong{color:var(--text)}
+
+    .secret-box{
+      display:none;
+      gap:8px;
+      padding:12px;
+      border:1px solid rgba(245,158,11,.35);
+      background:rgba(245,158,11,.07);
+      border-radius:14px;
+    }
+
+    .secret-row{
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+
+    .secret-row code{
+      flex:1;
+      word-break:break-all;
+      background:#0b1222;
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:10px;
+      color:#fde68a;
+    }
+
+    .privacy{
+      font-size:12px;
+      color:#8290ac;
+      line-height:1.5;
+    }
+
+    canvas{display:none}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <h1>Lecteur QR Code local</h1>
+        <p class="subtitle">Importe une image contenant un QR code. L’image est analysée directement dans ton navigateur et n’est envoyée nulle part.</p>
+      </div>
+      <div class="badge">100 % local • HTML autonome</div>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <div class="card-body">
+          <div id="dropzone" class="dropzone" tabindex="0" aria-label="Zone de dépôt d'image">
+            <div id="emptyState" class="empty">
+              <div class="icon">▦</div>
+              <div>
+                <div style="font-weight:800;color:var(--text);margin-bottom:6px">Dépose une image ici</div>
+                <div>PNG, JPG, WEBP… ou clique pour choisir un fichier.</div>
+              </div>
+              <div class="actions">
+                <label class="file-btn primary" for="fileInput">Choisir une image</label>
+                <button id="pasteBtn" class="secondary" type="button">Coller depuis le presse-papiers</button>
+              </div>
+            </div>
+            <img id="preview" alt="Aperçu de l'image importée" />
+          </div>
+
+          <div class="actions" style="margin-top:14px">
+            <button id="decodeBtn" class="primary" type="button" disabled>Lire le QR code</button>
+            <button id="resetBtn" class="secondary" type="button">Réinitialiser</button>
+          </div>
+        </div>
+      </article>
+
+      <aside class="card">
+        <div class="card-body side">
+          <div>
+            <div class="section-title">État</div>
+            <div id="status" class="status">En attente d’une image.</div>
+          </div>
+
+          <div>
+            <div class="section-title">Contenu décodé</div>
+            <textarea id="result" readonly placeholder="Le contenu du QR code apparaîtra ici…"></textarea>
+          </div>
+
+          <div id="secretBox" class="secret-box">
+            <div class="section-title" style="color:#fde68a">Clé TOTP détectée</div>
+            <div class="secret-row">
+              <code id="secretValue"></code>
+              <button id="copySecretBtn" class="secondary" type="button">Copier</button>
+            </div>
+            <div class="privacy">Cette clé permet de générer les codes MFA. Conserve-la comme un mot de passe.</div>
+          </div>
+
+          <div class="actions" style="justify-content:flex-start">
+            <button id="copyBtn" class="secondary" type="button" disabled>Copier le résultat</button>
+          </div>
+
+          <div class="meta">
+            <div><strong>Moteur :</strong> API native BarcodeDetector</div>
+            <div><strong>Navigateurs conseillés :</strong> Chrome / Edge récents</div>
+          </div>
+
+          <div class="privacy">
+            Si ton navigateur ne prend pas en charge <code>BarcodeDetector</code>, la page t’en informera. Aucun service externe n’est utilisé.
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <input id="fileInput" type="file" accept="image/*" />
+    <canvas id="canvas"></canvas>
+  </main>
+
+  <script>
+    (() => {
+      const fileInput = document.getElementById('fileInput');
+      const dropzone = document.getElementById('dropzone');
+      const emptyState = document.getElementById('emptyState');
+      const preview = document.getElementById('preview');
+      const decodeBtn = document.getElementById('decodeBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const pasteBtn = document.getElementById('pasteBtn');
+      const status = document.getElementById('status');
+      const result = document.getElementById('result');
+      const copyBtn = document.getElementById('copyBtn');
+      const secretBox = document.getElementById('secretBox');
+      const secretValue = document.getElementById('secretValue');
+      const copySecretBtn = document.getElementById('copySecretBtn');
+      const canvas = document.getElementById('canvas');
+
+      let currentFile = null;
+      let objectUrl = null;
+
+      const setStatus = (message, type = '') => {
+        status.textContent = message;
+        status.className = 'status' + (type ? ' ' + type : '');
+      };
+
+      const resetSecret = () => {
+        secretBox.style.display = 'none';
+        secretValue.textContent = '';
+      };
+
+      const extractTotpSecret = (text) => {
+        try {
+          if (!text || !text.toLowerCase().startsWith('otpauth://')) return null;
+          const url = new URL(text);
+          const secret = url.searchParams.get('secret');
+          return secret || null;
+        } catch {
+          return null;
+        }
+      };
+
+      const loadFile = (file) => {
+        if (!file || !file.type.startsWith('image/')) {
+          setStatus('Le fichier sélectionné n’est pas une image.', 'err');
+          return;
+        }
+
+        currentFile = file;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = URL.createObjectURL(file);
+
+        preview.src = objectUrl;
+        preview.style.display = 'block';
+        emptyState.style.display = 'none';
+        dropzone.classList.add('has-image');
+
+        result.value = '';
+        copyBtn.disabled = true;
+        decodeBtn.disabled = false;
+        resetSecret();
+        setStatus('Image chargée. Clique sur « Lire le QR code ».');
+      };
+
+      const decode = async () => {
+        if (!currentFile) return;
+
+        if (!('BarcodeDetector' in window)) {
+          setStatus('Ce navigateur ne prend pas en charge BarcodeDetector. Ouvre ce fichier avec une version récente de Chrome ou Edge.', 'warn');
+          return;
+        }
+
+        decodeBtn.disabled = true;
+        setStatus('Analyse du QR code…');
+
+        try {
+          const supported = await BarcodeDetector.getSupportedFormats();
+          if (!supported.includes('qr_code')) {
+            throw new Error('QR non supporté');
+          }
+
+          const detector = new BarcodeDetector({ formats: ['qr_code'] });
+          const bitmap = await createImageBitmap(currentFile);
+          const codes = await detector.detect(bitmap);
+
+          if (!codes.length) {
+            result.value = '';
+            copyBtn.disabled = true;
+            resetSecret();
+            setStatus('Aucun QR code détecté. Essaie une image plus nette, recadrée ou avec davantage de contraste.', 'warn');
+            return;
+          }
+
+          const text = codes.map(c => c.rawValue).filter(Boolean).join('\n\n');
+          result.value = text;
+          copyBtn.disabled = !text;
+
+          const secret = extractTotpSecret(codes[0]?.rawValue || '');
+          if (secret) {
+            secretValue.textContent = secret;
+            secretBox.style.display = 'grid';
+          } else {
+            resetSecret();
+          }
+
+          setStatus(codes.length === 1
+            ? 'QR code lu avec succès.'
+            : `${codes.length} QR codes détectés.`, 'ok');
+
+          bitmap.close?.();
+        } catch (err) {
+          console.error(err);
+          setStatus('Impossible de lire le QR code dans cette image.', 'err');
+        } finally {
+          decodeBtn.disabled = false;
+        }
+      };
+
+      const reset = () => {
+        currentFile = null;
+        fileInput.value = '';
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+        preview.removeAttribute('src');
+        preview.style.display = 'none';
+        emptyState.style.display = 'grid';
+        dropzone.classList.remove('has-image', 'drag');
+        result.value = '';
+        decodeBtn.disabled = true;
+        copyBtn.disabled = true;
+        resetSecret();
+        setStatus('En attente d’une image.');
+      };
+
+      fileInput.addEventListener('change', () => loadFile(fileInput.files?.[0]));
+      decodeBtn.addEventListener('click', decode);
+      resetBtn.addEventListener('click', reset);
+
+      dropzone.addEventListener('click', (e) => {
+        if (e.target.closest('button, label')) return;
+        fileInput.click();
+      });
+
+      dropzone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          fileInput.click();
+        }
+      });
+
+      ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e => {
+        e.preventDefault();
+        dropzone.classList.add('drag');
+      }));
+
+      ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e => {
+        e.preventDefault();
+        dropzone.classList.remove('drag');
+      }));
+
+      dropzone.addEventListener('drop', e => {
+        const file = [...e.dataTransfer.files].find(f => f.type.startsWith('image/'));
+        if (file) loadFile(file);
+        else setStatus('Aucune image valide trouvée dans le dépôt.', 'err');
+      });
+
+      pasteBtn.addEventListener('click', async () => {
+        try {
+          if (!navigator.clipboard?.read) {
+            throw new Error('Clipboard API indisponible');
+          }
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            const type = item.types.find(t => t.startsWith('image/'));
+            if (type) {
+              const blob = await item.getType(type);
+              const file = new File([blob], 'presse-papiers.' + (type.split('/')[1] || 'png'), { type });
+              loadFile(file);
+              return;
+            }
+          }
+          setStatus('Aucune image trouvée dans le presse-papiers.', 'warn');
+        } catch (err) {
+          setStatus('Le navigateur n’autorise pas la lecture du presse-papiers dans ce contexte. Utilise plutôt « Choisir une image ».', 'warn');
+        }
+      });
+
+      copyBtn.addEventListener('click', async () => {
+        if (!result.value) return;
+        try {
+          await navigator.clipboard.writeText(result.value);
+          setStatus('Résultat copié dans le presse-papiers.', 'ok');
+        } catch {
+          result.select();
+          document.execCommand('copy');
+          setStatus('Résultat copié.', 'ok');
+        }
+      });
+
+      copySecretBtn.addEventListener('click', async () => {
+        const secret = secretValue.textContent;
+        if (!secret) return;
+        try {
+          await navigator.clipboard.writeText(secret);
+          setStatus('Clé TOTP copiée.', 'ok');
+        } catch {
+          setStatus('Impossible de copier automatiquement la clé.', 'warn');
+        }
+      });
+
+      // Auto-détection si une image est chargée.
+      preview.addEventListener('load', () => {
+        if (currentFile) decode();
+      });
+    })();
+  </script>
+</body>
+</html>
