@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<!-- saved from url=(0145)file:///C:/Users/j.crevoisier/Documents/Codex/2026-09-01/referenced-chatgpt-conversation-this-is-an/outputs/validation-code-authentification.html -->
+<html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Authentificateur TOTP local</title>
+  <style>
+    :root { --ink:#182033;--muted:#687286;--line:#dce1eb;--surface:#fff;--soft:#f5f7fb;--brand:#4f46e5;--brand-dark:#3730a3;--focus:#2563eb;--danger:#b4233b;--danger-bg:#fff0f2;--success:#087a55;--success-bg:#eaf8f2;--demo:#8a4b00;--demo-bg:#fff7e5;--shadow:0 24px 70px rgba(29,39,68,.14) }
+    * { box-sizing:border-box } [hidden] { display:none!important }
+    body { min-height:100vh;margin:0;display:grid;place-items:center;padding:24px;color:var(--ink);background:radial-gradient(circle at 12% 12%,rgba(79,70,229,.12),transparent 31rem),radial-gradient(circle at 92% 88%,rgba(37,99,235,.09),transparent 27rem),#f7f8fc;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    button,input { font:inherit }
+    .card { width:min(100%,510px);padding:clamp(24px,6vw,42px);border:1px solid rgba(220,225,235,.88);border-radius:28px;background:rgba(255,255,255,.95);box-shadow:var(--shadow);backdrop-filter:blur(12px) }
+    .brand-row { display:flex;align-items:center;gap:14px;margin-bottom:26px }
+    .symbol { width:50px;height:50px;flex:0 0 auto;display:grid;place-items:center;border-radius:15px;color:#fff;background:linear-gradient(145deg,#6366f1,#4338ca);box-shadow:0 10px 24px rgba(79,70,229,.24) }
+    .symbol svg { width:26px;height:26px }.brand-name { margin:0;font-size:1rem;font-weight:850 }.local-label { margin:3px 0 0;color:var(--muted);font-size:.78rem }
+    .eyebrow { margin:0 0 8px;color:var(--brand-dark);font-size:.75rem;font-weight:850;letter-spacing:.11em;text-transform:uppercase }
+    h1 { margin:0;font-size:clamp(1.65rem,6vw,2.12rem);line-height:1.13;letter-spacing:-.035em }
+    .intro { margin:13px 0 26px;color:var(--muted);line-height:1.55 }
+    label { display:block;margin-bottom:9px;font-size:.9rem;font-weight:780 }.field-wrap { position:relative }
+    .secret-input { width:100%;min-height:52px;padding:0 50px 0 14px;border:1.5px solid var(--line);border-radius:13px;color:var(--ink);background:var(--surface);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.94rem;transition:border-color .15s,box-shadow .15s }
+    .secret-input:focus { border-color:var(--focus);outline:0;box-shadow:0 0 0 3px rgba(37,99,235,.16) }.secret-input[aria-invalid="true"] { border-color:var(--danger) }
+    .reveal { position:absolute;top:6px;right:6px;width:40px;height:40px;display:grid;place-items:center;padding:0;border:0;border-radius:9px;color:var(--muted);background:transparent;cursor:pointer }.reveal:hover { color:var(--ink);background:var(--soft) }.reveal svg { width:20px;height:20px }
+    .help { margin:9px 0 0;color:var(--muted);font-size:.8rem;line-height:1.5 }
+    .primary { width:100%;min-height:50px;margin-top:20px;border:0;border-radius:14px;color:#fff;background:var(--brand);font-weight:800;cursor:pointer;box-shadow:0 9px 20px rgba(79,70,229,.2);transition:background .15s,transform .15s,box-shadow .15s }
+    .primary:hover { background:var(--brand-dark);transform:translateY(-1px);box-shadow:0 11px 24px rgba(55,48,163,.25) }.primary:active { transform:translateY(0) }
+    button:focus-visible { outline:3px solid rgba(37,99,235,.3);outline-offset:3px }
+    .message { display:none;align-items:flex-start;gap:9px;margin-top:14px;padding:12px 13px;border-radius:12px;font-size:.87rem;line-height:1.45 }.message.show { display:flex }.message.error { color:var(--danger);background:var(--danger-bg) }.message.success { color:var(--success);background:var(--success-bg) }.message svg { width:18px;height:18px;flex:0 0 auto;margin-top:1px }
+    .privacy { display:flex;gap:10px;margin-top:23px;padding:13px;border:1px solid var(--line);border-radius:12px;color:var(--muted);background:var(--soft);font-size:.8rem;line-height:1.45 }.privacy svg { width:18px;height:18px;flex:0 0 auto;color:var(--success) }
+    .demo-row { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line) }
+    .demo-badge { display:inline-flex;align-items:center;gap:7px;padding:5px 9px;border-radius:999px;color:var(--demo);background:var(--demo-bg);font-size:.7rem;font-weight:850;letter-spacing:.06em;text-transform:uppercase }
+    .text-button { min-height:38px;padding:0;border:0;color:var(--brand-dark);background:transparent;font-size:.86rem;font-weight:780;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,48,163,.3);text-underline-offset:3px }.text-button:hover { text-decoration-color:currentColor }
+    .code-panel { text-align:center }.account { margin:0 0 4px;color:var(--muted);font-size:.83rem;font-weight:650 }.issuer { margin:0 0 25px;font-size:1.12rem;font-weight:820 }.code-label { margin:0 0 8px;color:var(--muted);font-size:.78rem;font-weight:780;letter-spacing:.08em;text-transform:uppercase }
+    .code { margin:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:clamp(2.55rem,13vw,4rem);font-weight:850;line-height:1.15;letter-spacing:.12em;font-variant-numeric:tabular-nums }.code.busy { color:var(--muted);letter-spacing:.04em }
+    .timer { --progress:100%;display:flex;align-items:center;gap:12px;width:min(100%,330px);margin:22px auto 0;color:var(--muted);font-size:.85rem }.timer-track { flex:1;height:6px;overflow:hidden;border-radius:999px;background:#e8ebf2 }.timer-fill { width:var(--progress);height:100%;border-radius:inherit;background:var(--brand);transition:width .2s linear,background .15s }.seconds { min-width:2.3ch;color:var(--ink);font-weight:850;font-variant-numeric:tabular-nums }
+    .code-actions { display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:25px }.secondary { min-height:48px;border:1.5px solid var(--line);border-radius:13px;color:var(--ink);background:var(--surface);font-weight:780;cursor:pointer }.secondary:hover { border-color:#b3bbcb;background:var(--soft) }.copy { color:#fff;border-color:var(--brand);background:var(--brand) }.copy:hover { color:#fff;border-color:var(--brand-dark);background:var(--brand-dark) }
+    .details { margin-top:24px;padding:14px;border-radius:12px;background:var(--soft);color:var(--muted);font-size:.78rem;line-height:1.5;text-align:left }
+    @media (max-width:430px) { body { padding:14px;align-items:start }.card { margin-top:14px;padding:24px 18px;border-radius:22px }.code-actions { grid-template-columns:1fr } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition-duration:.01ms!important } }
+  </style>
+</head>
+<body>
+  <main class="card" aria-labelledby="page-title">
+    <div class="brand-row">
+      <div class="symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 4.7 6v5.3c0 4.8 3 8.2 7.3 9.9 4.3-1.7 7.3-5.1 7.3-9.9V6L12 2.8Z"></path><path d="M9.4 12.3a2.6 2.6 0 1 1 4.6 1.6v2.3h-4v-2.3a2.6 2.6 0 0 1-.6-1.6Z"></path></svg></div>
+      <div><p class="brand-name">Authentificateur</p><p class="local-label">Outil local et autonome</p></div>
+    </div>
+
+    <section id="setup-panel" aria-labelledby="page-title" hidden="">
+      <p class="eyebrow">Ajouter un compte</p>
+      <h1 id="page-title">Importez votre clé OTP</h1>
+      <p class="intro">Collez la clé secrète fournie par le service. Le code TOTP correspondant sera généré ici et renouvelé automatiquement.</p>
+      <form id="secret-form" novalidate="">
+        <label for="secret">Clé secrète ou URI otpauth://</label>
+        <div class="field-wrap">
+          <input class="secret-input" id="secret" name="secret" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Ex. JBSW Y3DP EHPK 3PXP" aria-describedby="secret-help secret-message" autofocus="">
+          <button class="reveal" id="reveal-secret" type="button" aria-label="Masquer la clé" aria-pressed="true"><svg id="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 18 18"></path><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path><path d="M9.9 4.2A10.8 10.8 0 0 1 12 4c6 0 9.5 8 9.5 8a17.8 17.8 0 0 1-2.1 3.2"></path><path d="M6.2 6.2C3.8 8.1 2.5 12 2.5 12S6 20 12 20a9.8 9.8 0 0 0 3.1-.5"></path></svg></button>
+        </div>
+        <p class="help" id="secret-help">Formats acceptés : clé Base32, avec ou sans espaces, ou URI de configuration TOTP complète.</p>
+        <button class="primary" type="submit">Importer et générer le code</button>
+        <div class="message" id="secret-message" role="alert" aria-live="assertive"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.5h.01"></path></svg><span id="secret-message-text"></span></div>
+      </form>
+      <div class="privacy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2"></path><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M12 14v3"></path></svg><span>Votre clé reste uniquement en mémoire dans cet onglet : elle n’est ni envoyée, ni enregistrée. Fermer ou recharger la page l’efface.</span></div>
+      <div class="demo-row"><span class="demo-badge"><span aria-hidden="true">●</span> Démonstration</span><button class="text-button" id="load-demo" type="button">Utiliser une clé de test</button></div>
+    </section>
+
+    <section class="code-panel" id="code-panel" aria-labelledby="code-title">
+      <p class="eyebrow">Code actif</p><h1 id="code-title">Votre code d’authentification</h1><p class="intro">Utilisez ce code sur le service auquel le compte appartient.</p>
+      <p class="account" id="account-name">Compte importé</p><p class="issuer" id="issuer-name">Clé TOTP locale</p>
+      <p class="code-label">Code à usage unique</p><p class="code" id="totp-code" aria-live="polite" aria-atomic="true" data-raw-code="904746">904 746</p>
+      <div class="timer" id="timer" aria-label="Durée restante avant le prochain code" style="--progress: 40%;"><span>Nouveau code dans</span><div class="timer-track" aria-hidden="true"><div class="timer-fill" id="timer-fill" style="background: var(--brand);"></div></div><span class="seconds"><span id="seconds">12</span> s</span></div>
+      <div class="code-actions"><button class="secondary copy" id="copy-code" type="button">Copier le code</button><button class="secondary" id="change-secret" type="button">Changer de clé</button></div>
+      <div class="message" id="code-message" role="status" aria-live="polite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg><span id="code-message-text"></span></div>
+      <div class="details" id="totp-details">Standard TOTP · 6 chiffres · période de 30 secondes · HMAC-SHA1</div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+      const $=id=>document.getElementById(id), setupPanel=$('setup-panel'),codePanel=$('code-panel'),secretForm=$('secret-form'),secretInput=$('secret'),revealSecret=$('reveal-secret'),eyeIcon=$('eye-icon'),secretMessage=$('secret-message'),secretMessageText=$('secret-message-text'),loadDemo=$('load-demo'),totpCode=$('totp-code'),accountName=$('account-name'),issuerName=$('issuer-name'),secondsEl=$('seconds'),timer=$('timer'),timerFill=$('timer-fill'),copyCode=$('copy-code'),changeSecret=$('change-secret'),codeMessage=$('code-message'),codeMessageText=$('code-message-text'),details=$('totp-details');
+      let configuration=null,ticker=null,lastCounter=null;
+
+      function showSecretError(text){secretMessage.className='message show error';secretMessageText.textContent=text;secretInput.setAttribute('aria-invalid','true');secretInput.focus()}
+      function clearSecretError(){secretMessage.className='message';secretMessageText.textContent='';secretInput.removeAttribute('aria-invalid')}
+      function showCodeMessage(text){codeMessage.className='message show success';codeMessageText.textContent=text;setTimeout(()=>{codeMessage.className='message'},2200)}
+
+      function decodeBase32(value){
+        const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',clean=value.toUpperCase().replace(/[\s=-]/g,'');
+        if(!clean||/[^A-Z2-7]/.test(clean))throw new Error('La clé Base32 contient des caractères non valides.');
+        let bits='';for(const char of clean)bits+=alphabet.indexOf(char).toString(2).padStart(5,'0');
+        const bytes=[];for(let i=0;i+8<=bits.length;i+=8)bytes.push(parseInt(bits.slice(i,i+8),2));
+        if(bytes.length<10)throw new Error('La clé semble trop courte pour générer un code TOTP fiable.');
+        return new Uint8Array(bytes)
+      }
+
+      function parseConfiguration(raw){
+        const value=raw.trim();if(!value)throw new Error('Collez d’abord une clé secrète ou une URI otpauth://.');
+        let secret=value,issuer='Clé TOTP locale',account='Compte importé',period=30,digits=6,algorithm='SHA-1';
+        if(/^otpauth:\/\//i.test(value)){
+          let url;try{url=new URL(value)}catch{throw new Error('L’URI otpauth:// n’est pas valide.')}
+          if(url.hostname.toLowerCase()!=='totp')throw new Error('Seules les clés TOTP sont prises en charge.');
+          secret=url.searchParams.get('secret')||'';if(!secret)throw new Error('Cette URI ne contient pas de clé secrète.');
+          const label=decodeURIComponent(url.pathname.replace(/^\//,'')),separator=label.indexOf(':');
+          issuer=url.searchParams.get('issuer')||(separator>=0?label.slice(0,separator):'Compte TOTP');account=separator>=0?label.slice(separator+1):(label||'Compte importé');
+          period=Number(url.searchParams.get('period')||30);digits=Number(url.searchParams.get('digits')||6);
+          const rawAlgorithm=(url.searchParams.get('algorithm')||'SHA1').toUpperCase().replace(/[^A-Z0-9]/g,''),algorithms={SHA1:'SHA-1',SHA256:'SHA-256',SHA512:'SHA-512'};algorithm=algorithms[rawAlgorithm];
+          if(!algorithm)throw new Error('L’algorithme indiqué dans l’URI n’est pas pris en charge.');
+          if(!Number.isInteger(period)||period<5||period>300)throw new Error('La période TOTP indiquée n’est pas valide.');
+          if(!Number.isInteger(digits)||digits<6||digits>8)throw new Error('Le nombre de chiffres doit être compris entre 6 et 8.');
+        }
+        return{keyBytes:decodeBase32(secret),issuer,account,period,digits,algorithm}
+      }
+
+      async function generateTotp(config,counter){
+        if(!crypto?.subtle)throw new Error('Ce navigateur ne permet pas le calcul cryptographique depuis un fichier local. Essayez un navigateur récent.');
+        const buffer=new ArrayBuffer(8),view=new DataView(buffer);view.setUint32(0,Math.floor(counter/0x100000000),false);view.setUint32(4,counter>>>0,false);
+        const key=await crypto.subtle.importKey('raw',config.keyBytes,{name:'HMAC',hash:config.algorithm},false,['sign']);
+        const signature=new Uint8Array(await crypto.subtle.sign('HMAC',key,buffer)),offset=signature[signature.length-1]&15;
+        const binary=((signature[offset]&127)<<24)|((signature[offset+1]&255)<<16)|((signature[offset+2]&255)<<8)|(signature[offset+3]&255);
+        return String(binary%(10**config.digits)).padStart(config.digits,'0')
+      }
+
+      async function updateCode(force=false){
+        if(!configuration)return;const epoch=Math.floor(Date.now()/1000),counter=Math.floor(epoch/configuration.period),remaining=configuration.period-(epoch%configuration.period);
+        secondsEl.textContent=String(remaining);timer.style.setProperty('--progress',`${remaining/configuration.period*100}%`);timerFill.style.background=remaining<=5?'var(--danger)':'var(--brand)';
+        if(!force&&counter===lastCounter)return;lastCounter=counter;
+        try{const code=await generateTotp(configuration,counter),splitAt=Math.ceil(code.length/2);totpCode.textContent=`${code.slice(0,splitAt)} ${code.slice(splitAt)}`;totpCode.dataset.rawCode=code;totpCode.classList.remove('busy')}
+        catch(error){clearInterval(ticker);totpCode.textContent='Erreur';setupPanel.hidden=false;codePanel.hidden=true;showSecretError(error.message)}
+      }
+
+      function activateConfiguration(config){
+        configuration=config;lastCounter=null;accountName.textContent=config.account;issuerName.textContent=config.issuer;details.textContent=`Standard TOTP · ${config.digits} chiffres · période de ${config.period} secondes · HMAC-${config.algorithm.replace('-','')}`;
+        secretInput.value='';setupPanel.hidden=true;codePanel.hidden=false;totpCode.textContent='Calcul…';totpCode.classList.add('busy');updateCode(true);clearInterval(ticker);ticker=setInterval(updateCode,250);copyCode.focus()
+      }
+
+      secretForm.addEventListener('submit',event=>{event.preventDefault();clearSecretError();try{activateConfiguration(parseConfiguration(secretInput.value))}catch(error){showSecretError(error.message)}});
+      secretInput.addEventListener('input',clearSecretError);
+      revealSecret.addEventListener('click',()=>{const show=secretInput.type==='password';secretInput.type=show?'text':'password';revealSecret.setAttribute('aria-pressed',String(show));revealSecret.setAttribute('aria-label',show?'Masquer la clé':'Afficher la clé');eyeIcon.innerHTML=show?'<path d="m3 3 18 18"></path><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path><path d="M9.9 4.2A10.8 10.8 0 0 1 12 4c6 0 9.5 8 9.5 8a17.8 17.8 0 0 1-2.1 3.2"></path><path d="M6.2 6.2C3.8 8.1 2.5 12 2.5 12S6 20 12 20a9.8 9.8 0 0 0 3.1-.5"></path>':'<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle>'});
+      loadDemo.addEventListener('click',()=>{secretInput.value='JBSWY3DPEHPK3PXP';secretInput.type='text';secretInput.focus();clearSecretError()});
+      copyCode.addEventListener('click',async()=>{const code=totpCode.dataset.rawCode||'';if(!code)return;try{await navigator.clipboard.writeText(code)}catch{const temp=document.createElement('input');temp.value=code;temp.style.cssText='position:fixed;opacity:0';document.body.appendChild(temp);temp.select();document.execCommand('copy');temp.remove()}showCodeMessage('Code copié dans le presse-papiers.')});
+      changeSecret.addEventListener('click',()=>{clearInterval(ticker);if(configuration?.keyBytes)configuration.keyBytes.fill(0);configuration=null;lastCounter=null;totpCode.textContent='';totpCode.dataset.rawCode='';codePanel.hidden=true;setupPanel.hidden=false;secretInput.type='password';secretInput.focus()});
+      addEventListener('pagehide',()=>{if(configuration?.keyBytes)configuration.keyBytes.fill(0)});
+    })();
+  </script>
+
+
+</body></html>
