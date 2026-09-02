@@ -135,321 +135,340 @@
     </section>
   </main>
 
-  <script>
-    (() => {
-      'use strict';
-      const $ = id => document.getElementById(id);
+# fichier : authentification-totp-indexeddb.html
+<script>
+  (() => {
+    'use strict';
+    const $ = id => document.getElementById(id);
 
-      // Elements UI
-      const authPanel = $('auth-panel'), vaultPanel = $('vault-panel'), addPanel = $('add-panel'), codePanel = $('code-panel');
-      const authForm = $('auth-form'), masterPasswordInput = $('master-password'), authMessage = $('auth-message'), authMessageText = $('auth-message-text');
-      const keyList = $('key-list'), lockBtn = $('lock-btn'), showAddBtn = $('show-add-btn'), cancelAddBtn = $('cancel-add-btn');
-      const addForm = $('add-form'), keyNameInput = $('key-name'), keySecretInput = $('key-secret'), addMessage = $('add-message'), addMessageText = $('add-message-text');
-      const accountName = $('account-name'), issuerName = $('issuer-name'), totpCode = $('totp-code'), secondsEl = $('seconds'), timerFill = $('timer-fill');
-      const copyCode = $('copy-code'), backVaultBtn = $('back-vault-btn'), codeMessage = $('code-message'), codeMessageText = $('code-message-text');
+    // Elements UI
+    const authPanel = $('auth-panel'), vaultPanel = $('vault-panel'), addPanel = $('add-panel'), codePanel = $('code-panel');
+    const authForm = $('auth-form'), masterPasswordInput = $('master-password'), authMessage = $('auth-message'), authMessageText = $('auth-message-text');
+    const keyList = $('key-list'), lockBtn = $('lock-btn'), showAddBtn = $('show-add-btn'), cancelAddBtn = $('cancel-add-btn');
+    const addForm = $('add-form'), keyNameInput = $('key-name'), keySecretInput = $('key-secret'), addMessage = $('add-message'), addMessageText = $('add-message-text');
+    const accountName = $('account-name'), issuerName = $('issuer-name'), totpCode = $('totp-code'), secondsEl = $('seconds'), timerFill = $('timer-fill');
+    const copyCode = $('copy-code'), backVaultBtn = $('back-vault-btn'), codeMessage = $('code-message'), codeMessageText = $('code-message-text');
 
-      let masterKey = null;
-      let activeConfig = null;
-      let ticker = null;
-      let db = null;
+    let masterKey = null;
+    let currentSalt = null;
+    let activeConfig = null;
+    let ticker = null;
+    let db = null;
 
-      // -------------------------------------------------------------
-      // 1. GESTION INDEXEDDB
-      // -------------------------------------------------------------
-      function initDB() {
-        return new Promise((resolve, reject) => {
-          const req = indexedDB.open('TotpVaultDB', 1);
-          req.onupgradeneeded = e => {
-            const database = e.target.result;
-            if (!database.objectStoreNames.contains('keys')) {
-              database.createObjectStore('keys', { keyPath: 'id', autoIncrement: true });
-            }
-          };
-          req.onsuccess = e => { db = e.target.result; resolve(db); };
-          req.onerror = e => reject('Erreur ouverture IndexedDB');
-        });
-      }
-
-      function getAllKeysFromDB() {
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('keys', 'readonly');
-          const store = tx.objectStore('keys');
-          const req = store.getAll();
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject('Erreur lecture données');
-        });
-      }
-
-      function saveKeyToDB(record) {
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('keys', 'readwrite');
-          const store = tx.objectStore('keys');
-          const req = store.add(record);
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject('Erreur sauvegarde');
-        });
-      }
-
-      function deleteKeyFromDB(id) {
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('keys', 'readwrite');
-          const store = tx.objectStore('keys');
-          const req = store.delete(id);
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject('Erreur suppression');
-        });
-      }
-
-      // -------------------------------------------------------------
-      // 2. CRYPTOGRAPHIE (AES-GCM + PBKDF2)
-      // -------------------------------------------------------------
-      async function deriveMasterKey(password, salt) {
-        const enc = new TextEncoder();
-        const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
-        return crypto.subtle.deriveKey(
-          { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-          keyMaterial,
-          { name: 'AES-GCM', length: 256 },
-          false,
-          ['encrypt', 'decrypt']
-        );
-      }
-
-      async function encryptData(secretText, key) {
-        const enc = new TextEncoder();
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(secretText));
-        return { iv: Array.from(iv), data: Array.from(new Uint8Array(encrypted)) };
-      }
-
-      async function decryptData(encryptedObj, key) {
-        const dec = new TextDecoder();
-        const iv = new Uint8Array(encryptedObj.iv);
-        const data = new Uint8Array(encryptedObj.data);
-        const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
-        return dec.decode(decrypted);
-      }
-
-      // -------------------------------------------------------------
-      // 3. MOTEUR TOTP
-      // -------------------------------------------------------------
-      function decodeBase32(value) {
-        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', clean = value.toUpperCase().replace(/[\s=-]/g, '');
-        if (!clean || /[^A-Z2-7]/.test(clean)) throw new Error('Format Base32 invalide.');
-        let bits = ''; for (const char of clean) bits += alphabet.indexOf(char).toString(2).padStart(5, '0');
-        const bytes = []; for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
-        return new Uint8Array(bytes);
-      }
-
-      function parseConfig(raw, fallbackName) {
-        let value = raw.trim(), secret = value, issuer = 'MFA', account = fallbackName || 'Compte', period = 30, digits = 6, algorithm = 'SHA-1';
-        if (/^otpauth:\/\//i.test(value)) {
-          const url = new URL(value);
-          secret = url.searchParams.get('secret') || '';
-          const label = decodeURIComponent(url.pathname.replace(/^\//, '')), sep = label.indexOf(':');
-          issuer = url.searchParams.get('issuer') || (sep >= 0 ? label.slice(0, sep) : 'MFA');
-          account = sep >= 0 ? label.slice(sep + 1) : (label || fallbackName);
-        }
-        return { keyBytes: decodeBase32(secret), issuer, account, period, digits, algorithm };
-      }
-
-      async function generateTotp(config, counter) {
-        const buffer = new ArrayBuffer(8), view = new DataView(buffer);
-        view.setUint32(0, Math.floor(counter / 0x100000000), false);
-        view.setUint32(4, counter >>> 0, false);
-        const key = await crypto.subtle.importKey('raw', config.keyBytes, { name: 'HMAC', hash: config.algorithm }, false, ['sign']);
-        const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, buffer)), offset = sig[sig.length - 1] & 15;
-        const binary = ((sig[offset] & 127) << 24) | ((sig[offset + 1] & 255) << 16) | ((sig[offset + 2] & 255) << 8) | (sig[offset + 3] & 255);
-        return String(binary % (10 ** config.digits)).padStart(config.digits, '0');
-      }
-
-      function updateCodeUI() {
-        if (!activeConfig) return;
-        const epoch = Math.floor(Date.now() / 1000);
-        const counter = Math.floor(epoch / activeConfig.period);
-        const remaining = activeConfig.period - (epoch % activeConfig.period);
-        
-        secondsEl.textContent = remaining;
-        timerFill.style.width = `${(remaining / activeConfig.period) * 100}%`;
-        
-        generateTotp(activeConfig, counter).then(code => {
-          const mid = Math.ceil(code.length / 2);
-          totpCode.textContent = `${code.slice(0, mid)} ${code.slice(mid)}`;
-          totpCode.dataset.raw = code;
-        });
-      }
-
-      // -------------------------------------------------------------
-      // 4. FLUX DE L'APPLICATION ET IHM
-      // -------------------------------------------------------------
-      function showView(view) {
-        authPanel.hidden = view !== 'auth';
-        vaultPanel.hidden = view !== 'vault';
-        addPanel.hidden = view !== 'add';
-        codePanel.hidden = view !== 'code';
-        lockBtn.hidden = view === 'auth';
-      }
-
-      function showMsg(elText, elContainer, msg, isError = true) {
-        elText.textContent = msg;
-        elContainer.className = `message show ${isError ? 'error' : 'success'}`;
-      }
-
-      // Étape 1 : Connexion / Déverrouillage
-      authForm.addEventListener('submit', async e => {
-        e.preventDefault();
-        const pwd = masterPasswordInput.value;
-        if (!pwd) return;
-
-        try {
-          const records = await getAllKeysFromDB();
-          let salt;
-          if (records.length > 0) {
-            salt = new Uint8Array(records[0].salt);
-          } else {
-            salt = crypto.getRandomValues(new Uint8Array(16));
+    // -------------------------------------------------------------
+    // 1. GESTION INDEXEDDB
+    // -------------------------------------------------------------
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open('TotpVaultDB', 2);
+        req.onupgradeneeded = e => {
+          const database = e.target.result;
+          if (!database.objectStoreNames.contains('keys')) {
+            database.createObjectStore('keys', { keyPath: 'id', autoIncrement: true });
           }
-
-          masterKey = await deriveMasterKey(pwd, salt);
-
-          // Si des clés existent, essayer de déchiffrer la première pour valider le mot de passe
-          if (records.length > 0) {
-            try {
-              await decryptData(records[0].encryptedSecret, masterKey);
-            } catch {
-              showMsg(authMessageText, authMessage, 'Mot de passe maître incorrect.');
-              return;
-            }
+          if (!database.objectStoreNames.contains('meta')) {
+            database.createObjectStore('meta', { keyPath: 'key' });
           }
-
-          masterPasswordInput.value = '';
-          authMessage.className = 'message';
-          renderVault();
-        } catch (err) {
-          showMsg(authMessageText, authMessage, 'Erreur de déverrouillage : ' + err.message);
-        }
+        };
+        req.onsuccess = e => { db = e.target.result; resolve(db); };
+        req.onerror = () => reject('Erreur ouverture IndexedDB');
       });
+    }
 
-      // Étape 2 : Chargement de la liste (Vault)
-      async function renderVault() {
-        showView('vault');
-        keyList.innerHTML = '';
+    function getMeta(key) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('meta', 'readonly');
+        const req = tx.objectStore('meta').get(key);
+        req.onsuccess = () => resolve(req.result ? req.result.value : null);
+        req.onerror = () => reject('Erreur lecture meta');
+      });
+    }
+
+    function setMeta(key, value) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('meta', 'readwrite');
+        const req = tx.objectStore('meta').put({ key, value });
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject('Erreur écriture meta');
+      });
+    }
+
+    function getAllKeysFromDB() {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('keys', 'readonly');
+        const store = tx.objectStore('keys');
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject('Erreur lecture données');
+      });
+    }
+
+    function saveKeyToDB(record) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('keys', 'readwrite');
+        const store = tx.objectStore('keys');
+        const req = store.add(record);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject('Erreur sauvegarde');
+      });
+    }
+
+    function deleteKeyFromDB(id) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('keys', 'readwrite');
+        const store = tx.objectStore('keys');
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject('Erreur suppression');
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 2. CRYPTOGRAPHIE (AES-GCM + PBKDF2)
+    // -------------------------------------------------------------
+    async function deriveMasterKey(password, salt) {
+      const enc = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+      return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+    }
+
+    async function encryptData(secretText, key) {
+      const enc = new TextEncoder();
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(secretText));
+      return { iv: Array.from(iv), data: Array.from(new Uint8Array(encrypted)) };
+    }
+
+    async function decryptData(encryptedObj, key) {
+      const dec = new TextDecoder();
+      const iv = new Uint8Array(encryptedObj.iv);
+      const data = new Uint8Array(encryptedObj.data);
+      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+      return dec.decode(decrypted);
+    }
+
+    // -------------------------------------------------------------
+    // 3. MOTEUR TOTP
+    // -------------------------------------------------------------
+    function decodeBase32(value) {
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', clean = value.toUpperCase().replace(/[\s=-]/g, '');
+      if (!clean || /[^A-Z2-7]/.test(clean)) throw new Error('Format Base32 invalide.');
+      let bits = ''; for (const char of clean) bits += alphabet.indexOf(char).toString(2).padStart(5, '0');
+      const bytes = []; for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+      return new Uint8Array(bytes);
+    }
+
+    function parseConfig(raw, fallbackName) {
+      let value = raw.trim(), secret = value, issuer = 'MFA', account = fallbackName || 'Compte', period = 30, digits = 6, algorithm = 'SHA-1';
+      if (/^otpauth:\/\//i.test(value)) {
+        const url = new URL(value);
+        secret = url.searchParams.get('secret') || '';
+        const label = decodeURIComponent(url.pathname.replace(/^\//, '')), sep = label.indexOf(':');
+        issuer = url.searchParams.get('issuer') || (sep >= 0 ? label.slice(0, sep) : 'MFA');
+        account = sep >= 0 ? label.slice(sep + 1) : (label || fallbackName);
+      }
+      return { keyBytes: decodeBase32(secret), issuer, account, period, digits, algorithm };
+    }
+
+    async function generateTotp(config, counter) {
+      const buffer = new ArrayBuffer(8), view = new DataView(buffer);
+      view.setUint32(0, Math.floor(counter / 0x100000000), false);
+      view.setUint32(4, counter >>> 0, false);
+      const key = await crypto.subtle.importKey('raw', config.keyBytes, { name: 'HMAC', hash: config.algorithm }, false, ['sign']);
+      const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, buffer)), offset = sig[sig.length - 1] & 15;
+      const binary = ((sig[offset] & 127) << 24) | ((sig[offset + 1] & 255) << 16) | ((sig[offset + 2] & 255) << 8) | (sig[offset + 3] & 255);
+      return String(binary % (10 ** config.digits)).padStart(config.digits, '0');
+    }
+
+    function updateCodeUI() {
+      if (!activeConfig) return;
+      const epoch = Math.floor(Date.now() / 1000);
+      const counter = Math.floor(epoch / activeConfig.period);
+      const remaining = activeConfig.period - (epoch % activeConfig.period);
+      
+      secondsEl.textContent = remaining;
+      timerFill.style.width = `${(remaining / activeConfig.period) * 100}%`;
+      
+      generateTotp(activeConfig, counter).then(code => {
+        const mid = Math.ceil(code.length / 2);
+        totpCode.textContent = `${code.slice(0, mid)} ${code.slice(mid)}`;
+        totpCode.dataset.raw = code;
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 4. FLUX DE L'APPLICATION ET IHM
+    // -------------------------------------------------------------
+    function showView(view) {
+      authPanel.hidden = view !== 'auth';
+      vaultPanel.hidden = view !== 'vault';
+      addPanel.hidden = view !== 'add';
+      codePanel.hidden = view !== 'code';
+      lockBtn.hidden = view === 'auth';
+    }
+
+    function showMsg(elText, elContainer, msg, isError = true) {
+      elText.textContent = msg;
+      elContainer.className = `message show ${isError ? 'error' : 'success'}`;
+    }
+
+    // Connexion / Déverrouillage
+    authForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const pwd = masterPasswordInput.value;
+      if (!pwd) return;
+
+      try {
+        let savedSalt = await getMeta('salt');
+        
+        if (!savedSalt) {
+          // Premier usage : on génère et stocke le sel de dérivation
+          savedSalt = Array.from(crypto.getRandomValues(new Uint8Array(16)));
+          await setMeta('salt', savedSalt);
+        }
+
+        currentSalt = new Uint8Array(savedSalt);
+        masterKey = await deriveMasterKey(pwd, currentSalt);
+
         const records = await getAllKeysFromDB();
-
-        if (records.length === 0) {
-          keyList.innerHTML = '<div class="empty-state">Aucune clé MFA enregistrée. Cliquez sur "+ Ajouter" pour en créer une.</div>';
-          return;
+        
+        // Si des clés existent déjà, déchiffrer la 1ère pour vérifier la validité du mot de passe
+        if (records.length > 0) {
+          try {
+            await decryptData(records[0].encryptedSecret, masterKey);
+          } catch {
+            showMsg(authMessageText, authMessage, 'Mot de passe maître incorrect.');
+            return;
+          }
         }
 
-        records.forEach(item => {
-          const li = document.createElement('li');
-          li.className = 'key-item';
-          li.innerHTML = `
-            <div class="key-info">
-              <span class="key-name">${escapeHtml(item.name)}</span>
-              <span class="key-issuer">${escapeHtml(item.issuer || 'TOTP')}</span>
-            </div>
-            <button class="delete-btn" title="Supprimer">✕</button>
-          `;
-
-          // Clic pour afficher TOTP
-          li.addEventListener('click', e => {
-            if (e.target.classList.contains('delete-btn')) return;
-            openTotpCode(item);
-          });
-
-          // Supprimer une clé
-          li.querySelector('.delete-btn').addEventListener('click', async e => {
-            e.stopPropagation();
-            if (confirm(`Supprimer la clé pour "${item.name}" ?`)) {
-              await deleteKeyFromDB(item.id);
-              renderVault();
-            }
-          });
-
-          keyList.appendChild(li);
-        });
-      }
-
-      // Étape 3 : Ajouter une clé
-      showAddBtn.addEventListener('click', () => { showView('add'); addMessage.className = 'message'; });
-      cancelAddBtn.addEventListener('click', () => showView('vault'));
-
-      addForm.addEventListener('submit', async e => {
-        e.preventDefault();
-        const name = keyNameInput.value.trim();
-        const rawSecret = keySecretInput.value.trim();
-
-        try {
-          const config = parseConfig(rawSecret, name);
-          const records = await getAllKeysFromDB();
-          let salt = records.length > 0 ? records[0].salt : Array.from(crypto.getRandomValues(new Uint8Array(16)));
-
-          const encryptedSecret = await encryptData(rawSecret, masterKey);
-
-          await saveKeyToDB({
-            name,
-            issuer: config.issuer,
-            encryptedSecret,
-            salt
-          });
-
-          keyNameInput.value = '';
-          keySecretInput.value = '';
-          renderVault();
-        } catch (err) {
-          showMsg(addMessageText, addMessage, err.message);
-        }
-      });
-
-      // Étape 4 : Déchiffrer et afficher le code TOTP
-      async function openTotpCode(record) {
-        try {
-          const decryptedSecret = await decryptData(record.encryptedSecret, masterKey);
-          activeConfig = parseConfig(decryptedSecret, record.name);
-
-          accountName.textContent = record.name;
-          issuerName.textContent = activeConfig.issuer;
-
-          showView('code');
-          updateCodeUI();
-          clearInterval(ticker);
-          ticker = setInterval(updateCodeUI, 1000);
-        } catch (err) {
-          alert('Impossible de déchiffrer cette clé.');
-        }
-      }
-
-      backVaultBtn.addEventListener('click', () => {
-        clearInterval(ticker);
-        activeConfig = null;
+        masterPasswordInput.value = '';
+        authMessage.className = 'message';
         renderVault();
-      });
+      } catch (err) {
+        showMsg(authMessageText, authMessage, 'Erreur de déverrouillage : ' + err.message);
+      }
+    });
 
-      copyCode.addEventListener('click', () => {
-        const code = totpCode.dataset.raw;
-        if (!code) return;
-        navigator.clipboard.writeText(code).then(() => {
-          showMsg(codeMessageText, codeMessage, 'Code copié !', false);
-          setTimeout(() => codeMessage.className = 'message', 2000);
-        });
-      });
+    // Chargement de la liste (Vault)
+    async function renderVault() {
+      showView('vault');
+      keyList.innerHTML = '';
+      const records = await getAllKeysFromDB();
 
-      // Verrouillage
-      lockBtn.addEventListener('click', () => {
-        masterKey = null;
-        activeConfig = null;
-        clearInterval(ticker);
-        showView('auth');
-      });
-
-      function escapeHtml(str) {
-        return str.replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[match]);
+      if (records.length === 0) {
+        keyList.innerHTML = '<div class="empty-state">Aucune clé MFA enregistrée. Cliquez sur "+ Ajouter" pour en créer une.</div>';
+        return;
       }
 
-      // Initialisation DB au démarrage
-      initDB();
-    })();
-  </script>
+      records.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'key-item';
+        li.innerHTML = `
+          <div class="key-info">
+            <span class="key-name">${escapeHtml(item.name)}</span>
+            <span class="key-issuer">${escapeHtml(item.issuer || 'TOTP')}</span>
+          </div>
+          <button class="delete-btn" title="Supprimer">✕</button>
+        `;
+
+        li.addEventListener('click', e => {
+          if (e.target.classList.contains('delete-btn')) return;
+          openTotpCode(item);
+        });
+
+        li.querySelector('.delete-btn').addEventListener('click', async e => {
+          e.stopPropagation();
+          if (confirm(`Supprimer la clé pour "${item.name}" ?`)) {
+            await deleteKeyFromDB(item.id);
+            renderVault();
+          }
+        });
+
+        keyList.appendChild(li);
+      });
+    }
+
+    showAddBtn.addEventListener('click', () => { showView('add'); addMessage.className = 'message'; });
+    cancelAddBtn.addEventListener('click', () => showView('vault'));
+
+    // Ajouter une clé
+    addForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const name = keyNameInput.value.trim();
+      const rawSecret = keySecretInput.value.trim();
+
+      try {
+        const config = parseConfig(rawSecret, name);
+        const encryptedSecret = await encryptData(rawSecret, masterKey);
+
+        await saveKeyToDB({
+          name,
+          issuer: config.issuer,
+          encryptedSecret
+        });
+
+        keyNameInput.value = '';
+        keySecretInput.value = '';
+        renderVault();
+      } catch (err) {
+        showMsg(addMessageText, addMessage, err.message);
+      }
+    });
+
+    // Afficher le code TOTP
+    async function openTotpCode(record) {
+      try {
+        const decryptedSecret = await decryptData(record.encryptedSecret, masterKey);
+        activeConfig = parseConfig(decryptedSecret, record.name);
+
+        accountName.textContent = record.name;
+        issuerName.textContent = activeConfig.issuer;
+
+        showView('code');
+        updateCodeUI();
+        clearInterval(ticker);
+        ticker = setInterval(updateCodeUI, 1000);
+      } catch (err) {
+        alert('Impossible de déchiffrer cette clé.');
+      }
+    }
+
+    backVaultBtn.addEventListener('click', () => {
+      clearInterval(ticker);
+      activeConfig = null;
+      renderVault();
+    });
+
+    copyCode.addEventListener('click', () => {
+      const code = totpCode.dataset.raw;
+      if (!code) return;
+      navigator.clipboard.writeText(code).then(() => {
+        showMsg(codeMessageText, codeMessage, 'Code copié !', false);
+        setTimeout(() => codeMessage.className = 'message', 2000);
+      });
+    });
+
+    // Verrouillage
+    lockBtn.addEventListener('click', () => {
+      masterKey = null;
+      activeConfig = null;
+      clearInterval(ticker);
+      showView('auth');
+    });
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[match]);
+    }
+
+    initDB();
+  })();
+</script>
 </body>
 </html>
