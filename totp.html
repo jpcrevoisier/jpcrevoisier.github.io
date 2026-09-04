@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Authentificateur TOTP local avec Vault</title>
+   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>🛡️</text></svg>">
   <style>
     :root { --ink:#182033;--muted:#687286;--line:#dce1eb;--surface:#fff;--soft:#f5f7fb;--brand:#4f46e5;--brand-dark:#3730a3;--focus:#2563eb;--danger:#b4233b;--danger-bg:#fff0f2;--success:#087a55;--success-bg:#eaf8f2;--shadow:0 24px 70px rgba(29,39,68,.14) }
     * { box-sizing:border-box } [hidden] { display:none!important }
     body { min-height:100vh;margin:0;display:grid;place-items:center;padding:24px;color:var(--ink);background:radial-gradient(circle at 12% 12%,rgba(79,70,229,.12),transparent 31rem),radial-gradient(circle at 92% 88%,rgba(37,99,235,.09),transparent 27rem),#f7f8fc;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
     button,input { font:inherit }
-    .card { width:min(100%,510px);padding:clamp(24px,6vw,42px);border:1px solid rgba(220,225,235,.88);border-radius:28px;background:rgba(255,255,255,.95);box-shadow:var(--shadow);backdrop-filter:blur(12px) }
+    button:disabled { opacity:.55;cursor:not-allowed }
+    .card { position:relative;width:min(100%,560px);padding:clamp(24px,6vw,42px);border:1px solid rgba(220,225,235,.88);border-radius:28px;background:rgba(255,255,255,.95);box-shadow:var(--shadow);backdrop-filter:blur(12px) }
+    .card.dragging { border-color:var(--brand);box-shadow:0 24px 70px rgba(29,39,68,.14),0 0 0 5px rgba(79,70,229,.15) }
+    .card.dragging::after { content:"Déposez l’image pour scanner le QR TOTP";position:absolute;inset:12px;z-index:100;display:grid;place-items:center;padding:24px;border:2px dashed #818cf8;border-radius:20px;color:#fff;background:rgba(55,48,163,.94);font-size:1rem;font-weight:850;text-align:center;pointer-events:none }
     .brand-row { display:flex;align-items:center;justify-content:space-between;margin-bottom:26px }
     .brand-info { display:flex;align-items:center;gap:14px }
     .symbol { width:50px;height:50px;flex:0 0 auto;display:grid;place-items:center;border-radius:15px;color:#fff;background:linear-gradient(145deg,#6366f1,#4338ca);box-shadow:0 10px 24px rgba(79,70,229,.24) }
@@ -33,7 +37,8 @@
     .message { display:none;align-items:flex-start;gap:9px;margin-top:14px;padding:12px;border-radius:12px;font-size:.85rem;line-height:1.4 }.message.show { display:flex }.message.error { color:var(--danger);background:var(--danger-bg) }.message.success { color:var(--success);background:var(--success-bg) }
     
     /* Vault / List styles */
-    .vault-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px }
+    .vault-header { display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px }
+    .vault-actions { display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end }
     .key-list { list-style:none;padding:0;margin:16px 0;max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:14px }
     .key-item { display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface);cursor:pointer;transition:background .15s }
     .key-item:last-child { border-bottom:0 }
@@ -44,6 +49,18 @@
     .delete-btn { background:transparent;border:0;color:var(--muted);padding:6px;cursor:pointer;border-radius:6px }
     .delete-btn:hover { color:var(--danger);background:var(--danger-bg) }
     .empty-state { padding:24px;text-align:center;color:var(--muted);font-size:.88rem }
+    .scan-choice { display:flex;align-items:center;gap:12px;margin:4px 0 18px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--soft) }
+    .scan-choice p { flex:1;margin:0;color:var(--muted);font-size:.8rem;line-height:1.35 }
+    .scanner-preview { position:relative;min-height:280px;display:grid;place-items:center;overflow:hidden;margin:18px 0 12px;border:2px dashed transparent;border-radius:16px;background:#111827;color:#cbd5e1;text-align:center;transition:border-color .15s,background .15s,transform .15s }
+    .scanner-preview video { display:block;width:100%;min-height:280px;max-height:440px;object-fit:cover }
+    .scanner-placeholder { padding:28px;line-height:1.5 }
+    .scanner-placeholder strong { display:block;margin-bottom:6px;color:#fff;font-size:1rem }
+    .scanner-frame { position:absolute;inset:50% auto auto 50%;width:min(58%,250px);aspect-ratio:1;translate:-50% -50%;border:2px solid rgba(255,255,255,.9);border-radius:18px;box-shadow:0 0 0 999px rgba(0,0,0,.18);pointer-events:none }
+    .scanner-actions { display:grid;grid-template-columns:repeat(3,1fr);gap:8px }
+    .scanner-stop { width:100%;margin-top:8px;color:var(--danger);border-color:#efb9c2 }
+    .privacy-note { margin:12px 0 0;color:var(--muted);font-size:.78rem;line-height:1.45 }
+    #qr-image-input { display:none }
+    @media(max-width:560px){.vault-header{align-items:flex-start;flex-direction:column}.vault-actions{width:100%}.vault-actions button{flex:1}.scan-choice{align-items:stretch;flex-direction:column}.scanner-actions{grid-template-columns:1fr}}
 
     /* TOTP Panel styles */
     .code-panel { text-align:center }
@@ -59,7 +76,7 @@
   </style>
 </head>
 <body>
-  <main class="card">
+  <main class="card" id="app-card">
     <div class="brand-row">
       <div class="brand-info">
         <div class="symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 4.7 6v5.3c0 4.8 3 8.2 7.3 9.9 4.3-1.7 7.3-5.1 7.3-9.9V6L12 2.8Z"></path><path d="M9.4 12.3a2.6 2.6 0 1 1 4.6 1.6v2.3h-4v-2.3a2.6 2.6 0 0 1-.6-1.6Z"></path></svg></div>
@@ -90,16 +107,45 @@
           <p class="eyebrow">Coffre fort</p>
           <h1>Vos clés MFA</h1>
         </div>
-        <button class="secondary-btn" id="show-add-btn">+ Ajouter</button>
+        <div class="vault-actions">
+          <button class="secondary-btn" id="scan-image-btn" type="button">Scanner un QR</button>
+          <button class="secondary-btn" id="show-add-btn" type="button">+ Ajouter</button>
+        </div>
       </div>
       <ul class="key-list" id="key-list"></ul>
       <div class="message" id="vault-message"><span id="vault-message-text"></span></div>
     </section>
 
-    <!-- 3. AJOUT D'UNE NOUVELLE CLÉ -->
+    <!-- 3. SCANNER UN QR CODE -->
+    <section id="scanner-panel" hidden>
+      <p class="eyebrow">Nouvelle clé</p>
+      <h1>Scanner un QR TOTP</h1>
+      <p class="intro">Choisissez une image, filmez le QR avec votre webcam ou partagez la fenêtre qui l’affiche.</p>
+      <div class="scanner-preview" id="scanner-drop-zone">
+        <div class="scanner-placeholder" id="scanner-placeholder"><strong>Déposez une image ici</strong>Le scan démarre immédiatement, ou sélectionnez une source ci-dessous.</div>
+        <video id="scanner-video" autoplay muted playsinline hidden></video>
+        <div class="scanner-frame" id="scanner-frame" hidden aria-hidden="true"></div>
+      </div>
+      <div class="scanner-actions">
+        <button class="secondary-btn" id="scanner-image-btn" type="button">Image</button>
+        <button class="secondary-btn" id="scanner-webcam-btn" type="button">Webcam</button>
+        <button class="secondary-btn" id="scanner-window-btn" type="button">Fenêtre / écran</button>
+      </div>
+      <button class="secondary-btn scanner-stop" id="scanner-stop-btn" type="button" hidden>Arrêter le flux vidéo</button>
+      <p class="privacy-note">Les images et flux sont analysés uniquement dans cette page et ne sont jamais transmis.</p>
+      <button class="secondary-btn" id="scanner-cancel-btn" type="button" style="width:100%;margin-top:8px">Retour</button>
+      <div class="message" id="scanner-message"><span id="scanner-message-text"></span></div>
+    </section>
+
+    <!-- 4. AJOUT D'UNE NOUVELLE CLÉ -->
     <section id="add-panel" hidden>
       <p class="eyebrow">Nouvelle clé</p>
       <h1>Enregistrer une clé</h1>
+      <p class="intro">Saisissez les informations ou importez directement une image contenant un QR code TOTP.</p>
+      <div class="scan-choice">
+        <p><strong>Vous avez un QR code ?</strong><br>PNG, JPG, WEBP ou capture d’écran.</p>
+        <button class="secondary-btn" id="scan-image-from-form-btn" type="button">Ouvrir le scanner</button>
+      </div>
       <form id="add-form" novalidate>
         <div class="form-group">
           <label for="key-name">Nom du compte / Service</label>
@@ -115,7 +161,7 @@
       </form>
     </section>
 
-    <!-- 4. CODE TOTP ACTIF -->
+    <!-- 5. CODE TOTP ACTIF -->
     <section class="code-panel" id="code-panel" hidden>
       <p class="eyebrow">Code actif</p>
       <p class="account" id="account-name">Compte</p>
@@ -133,6 +179,7 @@
       </div>
       <div class="message" id="code-message"><span id="code-message-text"></span></div>
     </section>
+    <input id="qr-image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp">
   </main>
 <script>
   (() => {
@@ -149,9 +196,14 @@
 
 
     // Elements UI
-    const authPanel = $('auth-panel'), vaultPanel = $('vault-panel'), addPanel = $('add-panel'), codePanel = $('code-panel');
+    const appCard = $('app-card');
+    const authPanel = $('auth-panel'), vaultPanel = $('vault-panel'), scannerPanel = $('scanner-panel'), addPanel = $('add-panel'), codePanel = $('code-panel');
     const authForm = $('auth-form'), masterPasswordInput = $('master-password'), authMessage = $('auth-message'), authMessageText = $('auth-message-text');
     const keyList = $('key-list'), lockBtn = $('lock-btn'), showAddBtn = $('show-add-btn'), cancelAddBtn = $('cancel-add-btn');
+    const scanImageBtn = $('scan-image-btn'), scanImageFromFormBtn = $('scan-image-from-form-btn'), qrImageInput = $('qr-image-input');
+    const scannerImageBtn = $('scanner-image-btn'), scannerWebcamBtn = $('scanner-webcam-btn'), scannerWindowBtn = $('scanner-window-btn');
+    const scannerStopBtn = $('scanner-stop-btn'), scannerCancelBtn = $('scanner-cancel-btn'), scannerVideo = $('scanner-video');
+    const scannerPlaceholder = $('scanner-placeholder'), scannerFrame = $('scanner-frame'), scannerMessage = $('scanner-message'), scannerMessageText = $('scanner-message-text');
     const addForm = $('add-form'), keyNameInput = $('key-name'), keySecretInput = $('key-secret'), addMessage = $('add-message'), addMessageText = $('add-message-text');
     const accountName = $('account-name'), issuerName = $('issuer-name'), totpCode = $('totp-code'), secondsEl = $('seconds'), timerFill = $('timer-fill');
     const copyCode = $('copy-code'), backVaultBtn = $('back-vault-btn'), codeMessage = $('code-message'), codeMessageText = $('code-message-text');
@@ -161,6 +213,14 @@
     let activeConfig = null;
     let ticker = null;
     let db = null;
+    let qrScanOrigin = 'vault';
+    const qrCanvas = document.createElement('canvas');
+    const qrContext = qrCanvas.getContext('2d', { willReadFrequently: true });
+    let scannerStream = null;
+    let scannerAnimationFrame = null;
+    let scannerBusy = false;
+    let scannerLastAttempt = 0;
+    let currentView = 'auth';
 
     // -------------------------------------------------------------
     // 1. GESTION INDEXEDDB
@@ -275,10 +335,18 @@
       let value = raw.trim(), secret = value, issuer = 'MFA', account = fallbackName || 'Compte', period = 30, digits = 6, algorithm = 'SHA-1';
       if (/^otpauth:\/\//i.test(value)) {
         const url = new URL(value);
+        if (url.protocol !== 'otpauth:' || url.hostname.toLowerCase() !== 'totp') throw new Error('Seules les clés TOTP sont acceptées.');
         secret = url.searchParams.get('secret') || '';
         const label = decodeURIComponent(url.pathname.replace(/^\//, '')), sep = label.indexOf(':');
         issuer = url.searchParams.get('issuer') || (sep >= 0 ? label.slice(0, sep) : 'MFA');
         account = sep >= 0 ? label.slice(sep + 1) : (label || fallbackName);
+        period = Number.parseInt(url.searchParams.get('period') || '30', 10);
+        digits = Number.parseInt(url.searchParams.get('digits') || '6', 10);
+        const requestedAlgorithm = (url.searchParams.get('algorithm') || 'SHA1').toUpperCase().replace('-', '');
+        algorithm = ({ SHA1: 'SHA-1', SHA256: 'SHA-256', SHA512: 'SHA-512' })[requestedAlgorithm];
+        if (!algorithm) throw new Error('Algorithme TOTP non pris en charge.');
+        if (!Number.isInteger(period) || period < 1 || period > 300) throw new Error('Période TOTP invalide.');
+        if (![6, 7, 8].includes(digits)) throw new Error('Nombre de chiffres TOTP invalide.');
       }
       return { keyBytes: decodeBase32(secret), issuer, account, period, digits, algorithm };
     }
@@ -313,11 +381,18 @@
     // 4. FLUX DE L'APPLICATION ET IHM
     // -------------------------------------------------------------
     function showView(view) {
+      if (currentView === 'code' && view !== 'code') {
+        clearInterval(ticker);
+        activeConfig = null;
+      }
       authPanel.hidden = view !== 'auth';
       vaultPanel.hidden = view !== 'vault';
+      scannerPanel.hidden = view !== 'scanner';
       addPanel.hidden = view !== 'add';
       codePanel.hidden = view !== 'code';
       lockBtn.hidden = view === 'auth';
+      if (view !== 'scanner') stopLiveScanner();
+      currentView = view;
     }
 
     function showMsg(elText, elContainer, msg, isError = true) {
@@ -402,8 +477,200 @@
       });
     }
 
-    showAddBtn.addEventListener('click', () => { showView('add'); addMessage.className = 'message'; });
+    showAddBtn.addEventListener('click', () => {
+      keyNameInput.value = '';
+      keySecretInput.value = '';
+      showView('add');
+      addMessage.className = 'message';
+      keyNameInput.focus();
+    });
     cancelAddBtn.addEventListener('click', () => showView('vault'));
+
+    function openScanner(origin) {
+      qrScanOrigin = origin;
+      stopLiveScanner();
+      scannerMessage.className = 'message';
+      showView('scanner');
+    }
+
+    scanImageBtn.addEventListener('click', () => openScanner('vault'));
+    scanImageFromFormBtn.addEventListener('click', () => openScanner('add'));
+    scannerImageBtn.addEventListener('click', () => {
+      qrImageInput.value = '';
+      qrImageInput.click();
+    });
+    scannerWebcamBtn.addEventListener('click', () => startLiveScanner('webcam'));
+    scannerWindowBtn.addEventListener('click', () => startLiveScanner('window'));
+    scannerStopBtn.addEventListener('click', () => stopLiveScanner());
+    scannerCancelBtn.addEventListener('click', () => showView(qrScanOrigin));
+
+    function decodeQrFromSource(source, sourceWidth, sourceHeight, maxSize = 1280) {
+      if (typeof window.jsQR !== 'function') throw new Error('Le moteur de lecture QR n’est pas disponible.');
+      const scale = Math.min(1, maxSize / Math.max(sourceWidth, sourceHeight));
+      qrCanvas.width = Math.max(1, Math.round(sourceWidth * scale));
+      qrCanvas.height = Math.max(1, Math.round(sourceHeight * scale));
+      qrContext.drawImage(source, 0, 0, qrCanvas.width, qrCanvas.height);
+      const pixels = qrContext.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
+      return window.jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: 'attemptBoth' });
+    }
+
+    function acceptDecodedQr(decoded) {
+      const rawValue = (decoded && decoded.data || '').trim();
+      if (!/^otpauth:\/\/totp\//i.test(rawValue)) throw new Error('Le QR code ne contient pas une clé TOTP compatible.');
+      const config = parseConfig(rawValue, 'Compte');
+      keyNameInput.value = config.issuer !== 'MFA' ? `${config.issuer} — ${config.account}` : config.account;
+      keySecretInput.value = rawValue;
+      showView('add');
+      showMsg(addMessageText, addMessage, 'QR détecté. Vérifiez le nom puis enregistrez la clé.', false);
+      keyNameInput.focus();
+      keyNameInput.select();
+    }
+
+    async function processQrImage(file) {
+      try {
+        stopLiveScanner();
+        scannerMessage.className = 'message';
+        if (!file.type.startsWith('image/')) throw new Error('Le fichier sélectionné n’est pas une image.');
+
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('Impossible de lire le fichier.'));
+          reader.readAsDataURL(file);
+        });
+        const image = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error('Format d’image non reconnu.'));
+          img.src = dataUrl;
+        });
+
+        const decoded = decodeQrFromSource(image, image.naturalWidth, image.naturalHeight, 1600);
+        if (!decoded) throw new Error('Aucun QR code lisible trouvé dans cette image.');
+        acceptDecodedQr(decoded);
+      } catch (err) {
+        showMsg(scannerMessageText, scannerMessage, err.message);
+      }
+    }
+
+    qrImageInput.addEventListener('change', () => {
+      const file = qrImageInput.files && qrImageInput.files[0];
+      if (file) processQrImage(file);
+    });
+
+    function isFileDrag(event) {
+      return Array.from(event.dataTransfer && event.dataTransfer.types || []).includes('Files');
+    }
+
+    appCard.addEventListener('dragenter', event => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      appCard.classList.add('dragging');
+    });
+    appCard.addEventListener('dragover', event => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      appCard.classList.add('dragging');
+    });
+    appCard.addEventListener('dragleave', event => {
+      if (!appCard.contains(event.relatedTarget)) appCard.classList.remove('dragging');
+    });
+    appCard.addEventListener('drop', event => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      appCard.classList.remove('dragging');
+      if (!masterKey) {
+        showMsg(authMessageText, authMessage, 'Déverrouillez le coffre avant d’importer une clé TOTP.');
+        return;
+      }
+      const file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (!file) {
+        const textEl = currentView === 'add' ? addMessageText : $('vault-message-text');
+        const boxEl = currentView === 'add' ? addMessage : $('vault-message');
+        showMsg(textEl, boxEl, 'Déposez un fichier image contenant un QR code.');
+        return;
+      }
+      qrScanOrigin = currentView === 'add' ? 'add' : 'vault';
+      if (currentView !== 'scanner') showView('scanner');
+      processQrImage(file);
+    });
+
+    async function startLiveScanner(sourceType) {
+      try {
+        if (!navigator.mediaDevices) throw new Error('La capture vidéo nécessite une page ouverte via HTTPS ou localhost.');
+        if (sourceType === 'webcam' && typeof navigator.mediaDevices.getUserMedia !== 'function') throw new Error('La webcam n’est pas prise en charge par ce navigateur.');
+        if (sourceType === 'window' && typeof navigator.mediaDevices.getDisplayMedia !== 'function') throw new Error('Le partage de fenêtre n’est pas pris en charge par ce navigateur.');
+        stopLiveScanner();
+        scannerMessage.className = 'message';
+        scannerStream = sourceType === 'webcam'
+          ? await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+          : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+
+        scannerVideo.srcObject = scannerStream;
+        scannerVideo.hidden = false;
+        scannerFrame.hidden = false;
+        scannerPlaceholder.hidden = true;
+        scannerStopBtn.hidden = false;
+        scannerImageBtn.disabled = true;
+        scannerWebcamBtn.disabled = true;
+        scannerWindowBtn.disabled = true;
+        await scannerVideo.play();
+        scannerStream.getVideoTracks()[0].addEventListener('ended', () => {
+          if (scannerStream) {
+            stopLiveScanner();
+            showMsg(scannerMessageText, scannerMessage, 'Le partage vidéo a été arrêté.', false);
+          }
+        }, { once: true });
+        scannerLastAttempt = 0;
+        scannerAnimationFrame = requestAnimationFrame(scanLiveFrame);
+      } catch (err) {
+        stopLiveScanner();
+        const message = err && err.name === 'NotAllowedError'
+          ? 'L’accès à la source vidéo a été refusé ou annulé.'
+          : 'Impossible de démarrer la capture : ' + err.message;
+        showMsg(scannerMessageText, scannerMessage, message);
+      }
+    }
+
+    async function scanLiveFrame(timestamp) {
+      if (!scannerStream) return;
+      if (!scannerBusy && timestamp - scannerLastAttempt >= 160 && scannerVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        scannerBusy = true;
+        scannerLastAttempt = timestamp;
+        try {
+          const decoded = decodeQrFromSource(scannerVideo, scannerVideo.videoWidth, scannerVideo.videoHeight);
+          if (decoded) {
+            acceptDecodedQr(decoded);
+            return;
+          }
+        } catch (err) {
+          stopLiveScanner();
+          showMsg(scannerMessageText, scannerMessage, 'Erreur pendant le scan : ' + err.message);
+          return;
+        } finally {
+          scannerBusy = false;
+        }
+      }
+      scannerAnimationFrame = requestAnimationFrame(scanLiveFrame);
+    }
+
+    function stopLiveScanner() {
+      if (scannerAnimationFrame) cancelAnimationFrame(scannerAnimationFrame);
+      scannerAnimationFrame = null;
+      if (scannerStream) scannerStream.getTracks().forEach(track => track.stop());
+      scannerStream = null;
+      scannerBusy = false;
+      scannerVideo.pause();
+      scannerVideo.srcObject = null;
+      scannerVideo.hidden = true;
+      scannerFrame.hidden = true;
+      scannerPlaceholder.hidden = false;
+      scannerStopBtn.hidden = true;
+      scannerImageBtn.disabled = false;
+      scannerWebcamBtn.disabled = false;
+      scannerWindowBtn.disabled = false;
+    }
 
     // Ajouter une clé
     addForm.addEventListener('submit', async e => {
@@ -412,6 +679,8 @@
       const rawSecret = keySecretInput.value.trim();
 
       try {
+        if (!name) throw new Error('Indiquez un nom pour cette clé.');
+        if (!rawSecret) throw new Error('Indiquez une clé secrète ou une URI otpauth://.');
         const config = parseConfig(rawSecret, name);
         const encryptedSecret = await encryptData(rawSecret, masterKey);
 
