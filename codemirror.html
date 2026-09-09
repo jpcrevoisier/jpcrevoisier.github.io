@@ -1,0 +1,277 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CodeMirror</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>🔥</text></svg>">
+  <!-- CodeMirror CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/theme/monokai.min.css">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #1e1e1e;
+      color: #f0f0f0;
+      padding: 16px;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #header {
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    #link {
+      font-size: 1.4rem;
+      padding: 12px 24px;
+      background: #2d2d2d;
+      border: 1px solid #444;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #4fc3f7;
+      display: inline-block;
+      transition: all 0.3s;
+    }
+    #link:hover {
+      background: #3a3a3a;
+      color: #81d4fa;
+    }
+    #editor-container {
+      height: calc(100% - 80px);
+      border: 1px solid #333;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .CodeMirror {
+      height: 100% !important;
+      font-size: 14px;
+    }
+    .status {
+      position: fixed;
+      bottom: 8px;
+      right: 8px;
+      background: rgba(0,0,0,0.7);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="header">
+    <a id="link" href="#" target="blank">NoTitle</a>
+    <div class="status" id="status">Chargement des modules...</div>
+  </div>
+
+  <div id="editor-container"></div>
+
+  <!-- Chargement synchrone des dépendances CodeMirror -->
+  <script>
+    // Liste des scripts requis, dans l'ordre
+    const scripts = [
+      "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/codemirror.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/mode/xml/xml.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/mode/javascript/javascript.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/mode/css/css.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/mode/htmlmixed/htmlmixed.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/addon/edit/matchbrackets.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/addon/edit/closebrackets.min.js"
+    ];
+
+    let loadedCount = 0;
+    const statusEl = document.getElementById('status');
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = false;
+        script.onload = () => {
+          loadedCount++;
+          statusEl.textContent = `Chargement (${loadedCount}/${scripts.length})…`;
+          resolve();
+        };
+        script.onerror = () => reject(new Error(`Échec chargement : ${src}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    // Charger tous les scripts, puis initialiser
+    Promise.all(scripts.map(loadScript))
+      .then(() => {
+        statusEl.textContent = 'Modules chargés. Initialisation…';
+        initApp();
+      })
+      .catch(err => {
+        statusEl.textContent = `❌ Échec : ${err.message}`;
+        console.error(err);
+      });
+
+    function initApp() {
+      const state = {
+        link: document.getElementById('link'),
+        status: statusEl,
+        lastType: null
+      };
+
+      // Éditeur
+      const editor = CodeMirror(document.getElementById('editor-container'), {
+        value: `<!DOCTYPE html>
+<html>
+	<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta charset="UTF-8">
+	<title>Empty HTML</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>🔥</text></svg>">
+  <style>
+    body { font-family: sans-serif; background: #1a1a1a; color: #fff; }
+    h1 { color: #64b5f6; }
+  </style>
+	<script>
+	document.addEventListener("DOMContentLoaded", function(){
+		console.log("document loaded ...");
+	}, false);
+	<\/script>
+</head>
+<body>
+  <h1>Bonjour depuis HTML !</h1>
+  <p>Ceci est une démo.</p>
+  <script>
+    // title: Alert Demo
+    // alert('Ceci est un bookmarklet intégré en HTML !');
+  <\/script>
+</body>
+</html>`,
+        mode: 'htmlmixed',
+        theme: 'monokai',
+        lineNumbers: true,
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        tabSize: 2,
+        indentUnit: 2,
+        indentWithTabs: false,
+        extraKeys: {
+          'Tab': (cm) => {
+            if (cm.somethingSelected()) {
+              cm.indentSelection('add');
+            } else {
+              cm.replaceSelection('  '); // 2 espaces
+            }
+          },
+          'Shift-Tab': (cm) => cm.indentSelection('subtract'),
+          'Ctrl-S': () => processCode(),
+          'Cmd-S': () => processCode()
+        }
+      });
+
+      // Mise à jour dynamique du mode
+      function setMode(modeName) {
+        if (editor.getOption('mode') !== modeName) {
+          editor.setOption('mode', modeName);
+        }
+      }
+
+      // Lien
+      state.link.addEventListener('mouseenter', processCode);
+
+      document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+          e.preventDefault();
+          processCode(true);
+        }
+      });
+
+      function processCode(upload) {
+        const code = editor.getValue().trim();
+        if (!code) {
+          updateLink('NoTitle', '#');
+          setStatus('⚠ Aucun code');
+          setMode('htmlmixed');
+          return;
+        }
+
+        // Détection du type
+        const hasHTMLTag = /<\/?(html|head|body|title|div|p|h[1-6]|script|style)/i.test(code);
+        const type = hasHTMLTag ? 'html' : 'js';
+
+        state.lastType = type;
+        setMode(type === 'html' ? 'htmlmixed' : 'javascript');
+
+        try {
+          if (type === 'html') {
+            handleHTML(code);
+          } else {
+            handleJS(code);
+          }
+        } catch (err) {
+          setStatus(`❌ ${err.message}`);
+          console.error(err);
+        }
+      }
+
+      function handleHTML(code) {
+        const titleMatch = code.match(/<title[^>]*>([^<]+)<\/title/i);
+        const title = titleMatch ? titleMatch[1].trim() : 'NoTitle';
+        path=((title.endsWith(".html"))?title:title+'.html');
+
+        const b64 = btoa(unescape(encodeURIComponent(code)));
+        const href = `data:text/html;base64,${b64}`;
+        updateLink(title, href);
+        setStatus(`✅ HTML • ${title}`);
+      }
+
+      function handleJS(code, upload) {
+        let title = 'NoTitle';
+        const titleMatch = code.match(/\/\/\s*title\s*:\s*([^\n]+)/i);
+        if (titleMatch) title = titleMatch[1].trim();
+
+        path=((title.endsWith(".js"))?title:title+'.js');
+
+        // Nettoyage très léger (on garde la structure)
+        let jsCode = code
+          .replace(/\/\/ title:.*/gi, '')
+          .replace(/^\s*[\r\n]+/gm, '') // lignes vides initiales
+          .trim();
+
+        // Encapsulation en IIFE
+        let finalJS;
+        try {
+          finalJS = `(function(){${jsCode}})();`;
+          // Test de syntaxe
+          new Function(finalJS);
+        } catch (e) {
+          // Si échec, on essaie sans wrapper
+          try {
+            new Function(jsCode);
+            finalJS = jsCode;
+          } catch (e2) {
+            throw new Error('JS invalide pour bookmarklet');
+          }
+        }
+
+        const href = `javascript:${encodeURIComponent(finalJS)}`;
+        updateLink(title, href);
+        setStatus(`✅ JS • ${title}`);
+      }
+
+      function updateLink(title, href) {
+        state.link.textContent = title;
+        state.link.href = href;
+      }
+
+      function setStatus(msg) {
+        state.status.textContent = msg;
+      }
+
+      // Lancement initial
+      setTimeout(processCode, 100);
+      setStatus('✅ Prêt | Passe la souris sur le lien ou Ctrl+S');
+    }
+  </script>
+</body>
+</html>
