@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Authentificateur FIDO2 / Passkeys avec Vault</title>
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns=&#39;http://www.w3.org/2000/svg&#39; width=&#39;64&#39; height=&#39;64&#39;&gt;&lt;text y=&#39;50&#39; font-size=&#39;50&#39;&gt;%F0%9F%90%9D&lt;/text&gt;&lt;/svg&gt;">
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <style>
+    :root { --ink:#182033;--muted:#687286;--line:#dce1eb;--surface:#fff;--soft:#f5f7fb;--brand:#059669;--brand-dark:#047857;--focus:#10b981;--danger:#b4233b;--danger-bg:#fff0f2;--success:#087a55;--success-bg:#eaf8f2;--shadow:0 24px 70px rgba(29,39,68,.14) }
+    * { box-sizing:border-box } [hidden] { display:none!important }
+    body { min-height:100vh;margin:0;display:grid;place-items:center;padding:24px;color:var(--ink);background:radial-gradient(circle at 12% 12%,rgba(16,185,129,.12),transparent 31rem),radial-gradient(circle at 92% 88%,rgba(5,150,105,.09),transparent 27rem),#f7f8fc;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    button,input,textarea { font:inherit }
+    button:disabled { opacity:.55;cursor:not-allowed }
+    .card { position:relative;width:min(100%,580px);padding:clamp(24px,6vw,42px);border:1px solid rgba(220,225,235,.88);border-radius:28px;background:rgba(255,255,255,.95);box-shadow:var(--shadow);backdrop-filter:blur(12px) }
+    .brand-row { display:flex;align-items:center;justify-content:space-between;margin-bottom:26px }
+    .brand-info { display:flex;align-items:center;gap:14px }
+    .symbol { width:50px;height:50px;flex:0 0 auto;display:grid;place-items:center;border-radius:15px;color:#fff;background:linear-gradient(145deg,#10b981,#047857);box-shadow:0 10px 24px rgba(5,150,105,.24) }
+    .symbol svg { width:26px;height:26px }
+    .brand-name { margin:0;font-size:1rem;font-weight:850 }
+    .local-label { margin:3px 0 0;color:var(--muted);font-size:.78rem }
+    .eyebrow { margin:0 0 8px;color:var(--brand-dark);font-size:.75rem;font-weight:850;letter-spacing:.11em;text-transform:uppercase }
+    h1 { margin:0;font-size:clamp(1.5rem,5vw,1.9rem);line-height:1.15;letter-spacing:-.035em }
+    .intro { margin:10px 0 20px;color:var(--muted);line-height:1.5;font-size:.9rem }
+    .form-group { margin-bottom:16px }
+    label { display:block;margin-bottom:7px;font-size:.88rem;font-weight:780 }
+    .input-field { width:100%;min-height:48px;padding:10px 14px;border:1.5px solid var(--line);border-radius:12px;color:var(--ink);background:var(--surface);font-size:.92rem;transition:border-color .15s,box-shadow .15s }
+    .input-field.mono { font-family:ui-monospace,SFMono-Regular,Consolas,monospace }
+    .input-field:focus { border-color:var(--focus);outline:0;box-shadow:0 0 0 3px rgba(16,185,129,.16) }
+    .primary { width:100%;min-height:48px;margin-top:14px;border:0;border-radius:12px;color:#fff;background:var(--brand);font-weight:800;cursor:pointer;box-shadow:0 9px 20px rgba(5,150,105,.2);transition:background .15s,transform .15s }
+    .primary:hover { background:var(--brand-dark);transform:translateY(-1px) }
+    .secondary-btn { min-height:40px;padding:0 14px;border:1.5px solid var(--line);border-radius:10px;color:var(--ink);background:var(--surface);font-weight:700;font-size:.82rem;cursor:pointer }
+    .secondary-btn:hover { background:var(--soft);border-color:#b3bbcb }
+    .vault-header { display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px }
+    .vault-actions { display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end }
+    .key-list { list-style:none;padding:0;margin:16px 0;max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:14px }
+    .key-item { display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface);cursor:pointer;transition:background .15s }
+    .key-item:last-child { border-bottom:0 }
+    .key-item:hover { background:var(--soft) }
+    .key-info { display:flex;flex-direction:column;gap:2px }
+    .key-name { font-weight:800;font-size:.95rem }
+    .key-issuer { font-size:.78rem;color:var(--muted) }
+    .badge { display:inline-block;padding:2px 8px;border-radius:6px;font-size:.7rem;font-weight:800;text-transform:uppercase;background:var(--soft);color:var(--brand-dark);border:1px solid var(--line) }
+    .scanner-preview { position:relative;min-height:260px;display:grid;place-items:center;overflow:hidden;margin:18px 0 12px;border:2px dashed transparent;border-radius:16px;background:#111827;color:#cbd5e1;text-align:center }
+    .scanner-preview video { display:block;width:100%;min-height:260px;max-height:400px;object-fit:cover }
+    .scanner-placeholder { padding:28px;line-height:1.5 }
+    .scanner-placeholder strong { display:block;margin-bottom:6px;color:#fff;font-size:1rem }
+    .scanner-actions { display:grid;grid-template-columns:repeat(3,1fr);gap:8px }
+    .scanner-stop { width:100%;margin-top:8px;color:var(--danger);border-color:#efb9c2 }
+    .message { display:none;align-items:flex-start;gap:9px;margin-top:14px;padding:12px;border-radius:12px;font-size:.85rem;line-height:1.4 }.message.show { display:flex }.message.error { color:var(--danger);background:var(--danger-bg) }.message.success { color:var(--success);background:var(--success-bg) }
+    #qr-image-input { display:none }
+    .status-card { text-align:center;padding:20px;border-radius:16px;background:var(--soft);border:1px solid var(--line);margin-bottom:16px }
+    .status-card h2 { margin:0 0 8px;font-size:1.1rem }
+    .status-card p { margin:0;font-size:.85rem;color:var(--muted) }
+  </style>
+</head>
+<body>
+  <main class="card" id="app-card">
+    <div class="brand-row">
+      <div class="brand-info">
+        <div class="symbol" aria-hidden="true">
+          <!-- FIDO / Passkey Icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-2 2l-2 2m2-2l2 2m-4-2l2-2M3 11a7 7 0 0 1 11.5-5.24L21 12v3h-3v2h-2v2h-3l-1.24-1.24A7 7 0 1 1 3 11z"></path><circle cx="7.5" cy="10.5" r="1.5"></circle></svg>
+        </div>
+        <div><p class="brand-name">FIDO2 / WebAuthn</p><p class="local-label">Passkeys &amp; Clés de sécurité</p></div>
+      </div>
+      <button id="lock-btn" class="secondary-btn">Verrouiller</button>
+    </div>
+
+    <!-- AUTHENTIFICATION -->
+    <section id="auth-panel">
+      <p class="eyebrow">Coffre sécurisé</p>
+      <h1>Déverrouiller le coffre FIDO</h1>
+      <p class="intro">Entrez votre mot de passe maître pour gérer vos identifiants Passkeys / FIDO2.</p>
+      <form id="auth-form" novalidate>
+        <div class="form-group">
+          <label for="master-password">Mot de passe maître</label>
+          <input class="input-field" id="master-password" type="password" required autofocus placeholder="••••••••••••">
+        </div>
+        <button class="primary" type="submit">Déverrouiller</button>
+      </form>
+    </section>
+
+    <!-- VAULT -->
+    <section id="vault-panel" hidden>
+      <div class="vault-header">
+        <div>
+          <p class="eyebrow">Gestionnaire</p>
+          <h1>Passkeys enregistrées</h1>
+        </div>
+        <div class="vault-actions">
+          <button class="secondary-btn" id="scan-fido-btn" type="button">Scanner FIDO:/</button>
+          <button class="secondary-btn" id="show-add-btn" type="button">+ Enregistrer</button>
+        </div>
+      </div>
+      
+      <div class="status-card">
+        <h2 id="webauthn-status-title">API WebAuthn disponible</h2>
+        <p id="webauthn-status-desc">Votre navigateur prend en charge les opérations FIDO2 / Passkeys natives.</p>
+      </div>
+
+      <ul class="key-list" id="key-list"></ul>
+    </section>
+
+    <!-- SCANNER (Support des URL FIDO:/ et QR codes FIDO) -->
+    <section id="scanner-panel" hidden>
+      <p class="eyebrow">Scanner d'enrôlement</p>
+      <h1>Scanner un QR Code FIDO</h1>
+      <p class="intro">Analyse les schémas <code class="mono">fido:/</code> ou <code class="mono">webauthn://</code> à partir d'une image, d'un partage d'écran ou de la webcam.</p>
+      <div class="scanner-preview" id="scanner-drop-zone">
+        <div class="scanner-placeholder" id="scanner-placeholder"><strong>Déposez un QR code FIDO ici</strong></div>
+        <video id="scanner-video" autoplay muted playsinline hidden></video>
+      </div>
+      <div class="scanner-actions">
+        <button class="secondary-btn" id="scanner-image-btn" type="button">Image</button>
+        <button class="secondary-btn" id="scanner-screen-btn" type="button">Écran</button>
+        <button class="secondary-btn" id="scanner-webcam-btn" type="button">Webcam</button>
+      </div>
+      <button class="secondary-btn scanner-stop" id="scanner-stop-btn" type="button" hidden>Arrêter le flux vidéo</button>
+      <button class="secondary-btn" id="scanner-cancel-btn" type="button" style="width:100%;margin-top:8px">Retour</button>
+    </section>
+
+    <!-- FORMULAIRE / TRAITEMENT FIDO -->
+    <section id="add-panel" hidden>
+      <p class="eyebrow">Nouvel identifiant</p>
+      <h1>Créer / Associer une clé FIDO</h1>
+      <form id="add-form" novalidate>
+        <div class="form-group">
+          <label for="fido-relying-party">Relying Party (Domaine / Service)</label>
+          <input class="input-field" id="fido-relying-party" type="text" placeholder="ex: example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="fido-username">Nom d'utilisateur / Compte</label>
+          <input class="input-field" id="fido-username" type="text" placeholder="ex: jean.dupont@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="fido-payload">URI FIDO ou paramètre Challenge (Optionnel)</label>
+          <textarea class="input-field mono" id="fido-payload" rows="3" placeholder="fido:/enrol?rp=... ou challenge JSON"></textarea>
+        </div>
+        <button class="primary" id="fido-register-btn" type="button">Déclencher l'enrôlement FIDO2</button>
+        <button class="secondary-btn" id="cancel-add-btn" type="button" style="width:100%; margin-top:8px;">Annuler</button>
+      </form>
+    </section>
+
+    <div class="message" id="status-msg"></div>
+
+    <input id="qr-image-input" type="file" accept="image/*">
+    <canvas id="qr-canvas" hidden></canvas>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+      const $ = id => document.getElementById(id);
+      let activeStream = null;
+      let scanAnimationId = null;
+
+      const panels = ['auth-panel', 'vault-panel', 'scanner-panel', 'add-panel'];
+      function showPanel(panelId) {
+        stopStream();
+        panels.forEach(id => {
+          const el = $(id);
+          if (el) el.hidden = (id !== panelId);
+        });
+      }
+
+      function showMessage(text, isError = false) {
+        const msg = $('status-msg');
+        msg.textContent = text;
+        msg.className = `message show ${isError ? 'error' : 'success'}`;
+        setTimeout(() => msg.classList.remove('show'), 5000);
+      }
+
+      function stopStream() {
+        if (scanAnimationId) cancelAnimationFrame(scanAnimationId);
+        if (activeStream) {
+          activeStream.getTracks().forEach(t => t.stop());
+          activeStream = null;
+        }
+        $('scanner-video').hidden = true;
+        $('scanner-placeholder').hidden = false;
+        $('scanner-stop-btn').hidden = true;
+      }
+
+      // Traitement des données QR ou URL FIDO:/
+      function processFidoURI(data) {
+        if (!data) return;
+        
+        let urlStr = data.trim();
+        // Normalisation du schéma fido:/ ou fido://
+        if (urlStr.toLowerCase().startsWith('fido:/')) {
+          try {
+            // Remplacement pour parser proprement via URL API
+            const normalized = urlStr.replace(/^fido:\/*/, 'https://');
+            const url = new URL(normalized);
+            const rp = url.searchParams.get('rp') || url.hostname;
+            const user = url.searchParams.get('user') || url.searchParams.get('username');
+            
+            if (rp) $('fido-relying-party').value = rp;
+            if (user) $('fido-username').value = user;
+            $('fido-payload').value = data;
+            
+            showMessage("URL FIDO détectée et extraite !");
+            showPanel('add-panel');
+            return;
+          } catch(e) {
+            console.warn("Échec de parsing d'URL FIDO", e);
+          }
+        }
+        
+        $('fido-payload').value = data;
+        showPanel('add-panel');
+      }
+
+      function scanVideoFrame() {
+        const video = $('scanner-video');
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          const canvas = $('qr-canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code && code.data) {
+            processFidoURI(code.data);
+            return;
+          }
+        }
+        scanAnimationId = requestAnimationFrame(scanVideoFrame);
+      }
+
+      async function startMediaStream(getMediaFn) {
+        try {
+          stopStream();
+          activeStream = await getMediaFn();
+          const video = $('scanner-video');
+          video.srcObject = activeStream;
+          video.hidden = false;
+          $('scanner-placeholder').hidden = true;
+          $('scanner-stop-btn').hidden = false;
+          video.play();
+          scanAnimationId = requestAnimationFrame(scanVideoFrame);
+        } catch (err) {
+          showMessage("Impossible d'accéder au flux vidéo : " + err.message, true);
+        }
+      }
+
+      // Appel de l'API WebAuthn Native (navigator.credentials.create)
+      async function registerWebAuthnCredential(rpName, userName) {
+        if (!window.PublicKeyCredential) {
+          showMessage("WebAuthn n'est pas supporté par ce navigateur.", true);
+          return;
+        }
+
+        const challenge = new Uint8Array(32);
+        window.crypto.getRandomValues(challenge);
+
+        const userId = new Uint8Array(16);
+        window.crypto.getRandomValues(userId);
+
+        const createCredentialOptions = {
+          publicKey: {
+            challenge: challenge,
+            rp: { name: rpName, id: window.location.hostname || "localhost" },
+            user: {
+              id: userId,
+              name: userName,
+              displayName: userName,
+            },
+            pubKeyCredParams: [
+              { alg: -7, type: "public-key" },  // ES256
+              { alg: -257, type: "public-key" } // RS256
+            ],
+            authenticatorSelection: {
+              userVerification: "preferred"
+            },
+            timeout: 60000
+          }
+        };
+
+        try {
+          const newCredential = await navigator.credentials.create(createCredentialOptions);
+          showMessage("Enregistrement FIDO2 réussi pour " + userName);
+          showPanel('vault-panel');
+        } catch (err) {
+          showMessage("Échec de l'enregistrement WebAuthn : " + err.message, true);
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        showPanel('auth-panel');
+
+        // Vérification de la compatibilité du navigateur
+        if (!window.PublicKeyCredential) {
+          $('webauthn-status-title').textContent = "WebAuthn non supporté";
+          $('webauthn-status-desc').textContent = "Ce navigateur ne prend pas en charge l'API WebAuthn / Passkeys.";
+        }
+
+        $('auth-form').addEventListener('submit', (e) => {
+          e.preventDefault();
+          showPanel('vault-panel');
+        });
+
+        $('scan-fido-btn').addEventListener('click', () => showPanel('scanner-panel'));
+        $('show-add-btn').addEventListener('click', () => showPanel('add-panel'));
+        $('scanner-cancel-btn').addEventListener('click', () => showPanel('vault-panel'));
+        $('cancel-add-btn').addEventListener('click', () => showPanel('vault-panel'));
+        $('lock-btn').addEventListener('click', () => showPanel('auth-panel'));
+
+        // Action d'enregistrement FIDO
+        $('fido-register-btn').addEventListener('click', () => {
+          const rp = $('fido-relying-party').value.trim();
+          const user = $('fido-username').value.trim();
+          if (!rp || !user) {
+            showMessage("Veuillez remplir le domaine et l'utilisateur.", true);
+            return;
+          }
+          registerWebAuthnCredential(rp, user);
+        });
+
+        // Scan Média
+        $('scanner-image-btn').addEventListener('click', () => $('qr-image-input').click());
+        
+        $('scanner-webcam-btn').addEventListener('click', () => {
+          startMediaStream(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }));
+        });
+
+        $('scanner-screen-btn').addEventListener('click', () => {
+          startMediaStream(() => navigator.mediaDevices.getDisplayMedia({ video: true }));
+        });
+
+        $('scanner-stop-btn').addEventListener('click', stopStream);
+
+        // Lecture d'image QR
+        $('qr-image-input').addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const img = new Image();
+          img.onload = () => {
+            const canvas = $('qr-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code && code.data) processFidoURI(code.data);
+            else showMessage("Aucun QR Code FIDO lisible trouvé sur cette image.", true);
+          };
+          img.src = URL.createObjectURL(file);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
