@@ -1,4 +1,4 @@
-## Les fichiers : 
+Quelques fichiers html autonomes pour des petits usages / besoins ...
 
 
  - [🛡️totp](https://jpcrevoisier.github.io/totp.html)
