@@ -1,2 +1,2 @@
 Les fichiers : 
-[totp.html](totp.html)
+[totp.html](https://jpcrevoisier.github.io/totp.html)
