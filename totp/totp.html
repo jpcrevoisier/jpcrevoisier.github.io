@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Authentificateur TOTP local avec Vault</title>
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns=&#39;http://www.w3.org/2000/svg&#39; width=&#39;64&#39; height=&#39;64&#39;&gt;&lt;text y=&#39;50&#39; font-size=&#39;50&#39;&gt;%F0%9F%9B%A1%EF%B8%8F&lt;/text&gt;&lt;/svg&gt;">
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <style>
+    :root { --ink:#182033;--muted:#687286;--line:#dce1eb;--surface:#fff;--soft:#f5f7fb;--brand:#4f46e5;--brand-dark:#3730a3;--focus:#2563eb;--danger:#b4233b;--danger-bg:#fff0f2;--success:#087a55;--success-bg:#eaf8f2;--shadow:0 24px 70px rgba(29,39,68,.14) }
+    * { box-sizing:border-box } [hidden] { display:none!important }
+    body { min-height:100vh;margin:0;display:grid;place-items:center;padding:24px;color:var(--ink);background:radial-gradient(circle at 12% 12%,rgba(79,70,229,.12),transparent 31rem),radial-gradient(circle at 92% 88%,rgba(37,99,235,.09),transparent 27rem),#f7f8fc;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    button,input { font:inherit }
+    button:disabled { opacity:.55;cursor:not-allowed }
+    .card { position:relative;width:min(100%,560px);padding:clamp(24px,6vw,42px);border:1px solid rgba(220,225,235,.88);border-radius:28px;background:rgba(255,255,255,.95);box-shadow:var(--shadow);backdrop-filter:blur(12px) }
+    .card.dragging { border-color:var(--brand);box-shadow:0 24px 70px rgba(29,39,68,.14),0 0 0 5px rgba(79,70,229,.15) }
+    .brand-row { display:flex;align-items:center;justify-content:space-between;margin-bottom:26px }
+    .brand-info { display:flex;align-items:center;gap:14px }
+    .symbol { width:50px;height:50px;flex:0 0 auto;display:grid;place-items:center;border-radius:15px;color:#fff;background:linear-gradient(145deg,#6366f1,#4338ca);box-shadow:0 10px 24px rgba(79,70,229,.24) }
+    .symbol svg { width:26px;height:26px }
+    .brand-name { margin:0;font-size:1rem;font-weight:850 }
+    .local-label { margin:3px 0 0;color:var(--muted);font-size:.78rem }
+    .eyebrow { margin:0 0 8px;color:var(--brand-dark);font-size:.75rem;font-weight:850;letter-spacing:.11em;text-transform:uppercase }
+    h1 { margin:0;font-size:clamp(1.5rem,5vw,1.9rem);line-height:1.15;letter-spacing:-.035em }
+    .intro { margin:10px 0 20px;color:var(--muted);line-height:1.5;font-size:.9rem }
+    .form-group { margin-bottom:16px }
+    label { display:block;margin-bottom:7px;font-size:.88rem;font-weight:780 }
+    .input-field { width:100%;min-height:48px;padding:0 14px;border:1.5px solid var(--line);border-radius:12px;color:var(--ink);background:var(--surface);font-size:.92rem;transition:border-color .15s,box-shadow .15s }
+    .input-field.mono { font-family:ui-monospace,SFMono-Regular,Consolas,monospace }
+    .input-field:focus { border-color:var(--focus);outline:0;box-shadow:0 0 0 3px rgba(37,99,235,.16) }
+    .primary { width:100%;min-height:48px;margin-top:14px;border:0;border-radius:12px;color:#fff;background:var(--brand);font-weight:800;cursor:pointer;box-shadow:0 9px 20px rgba(79,70,229,.2);transition:background .15s,transform .15s }
+    .primary:hover { background:var(--brand-dark);transform:translateY(-1px) }
+    .secondary-btn { min-height:40px;padding:0 14px;border:1.5px solid var(--line);border-radius:10px;color:var(--ink);background:var(--surface);font-weight:700;font-size:.82rem;cursor:pointer }
+    .secondary-btn:hover { background:var(--soft);border-color:#b3bbcb }
+    .message { display:none;align-items:flex-start;gap:9px;margin-top:14px;padding:12px;border-radius:12px;font-size:.85rem;line-height:1.4 }.message.show { display:flex }.message.error { color:var(--danger);background:var(--danger-bg) }.message.success { color:var(--success);background:var(--success-bg) }
+    .vault-header { display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px }
+    .vault-actions { display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end }
+    .key-list { list-style:none;padding:0;margin:16px 0;max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:14px }
+    .key-item { display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface);cursor:pointer;transition:background .15s }
+    .key-item:last-child { border-bottom:0 }
+    .key-item:hover { background:var(--soft) }
+    .key-info { display:flex;flex-direction:column;gap:2px }
+    .key-name { font-weight:800;font-size:.95rem }
+    .key-issuer { font-size:.78rem;color:var(--muted) }
+    .scanner-preview { position:relative;min-height:280px;display:grid;place-items:center;overflow:hidden;margin:18px 0 12px;border:2px dashed transparent;border-radius:16px;background:#111827;color:#cbd5e1;text-align:center }
+    .scanner-preview video { display:block;width:100%;min-height:280px;max-height:440px;object-fit:cover }
+    .scanner-placeholder { padding:28px;line-height:1.5 }
+    .scanner-placeholder strong { display:block;margin-bottom:6px;color:#fff;font-size:1rem }
+    .scanner-actions { display:grid;grid-template-columns:repeat(3,1fr);gap:8px }
+    .scanner-stop { width:100%;margin-top:8px;color:var(--danger);border-color:#efb9c2 }
+    #qr-image-input { display:none }
+    .code-panel { text-align:center }
+    .account { margin:0 0 4px;color:var(--muted);font-size:.83rem;font-weight:650 }
+    .issuer { margin:0 0 20px;font-size:1.1rem;font-weight:820 }
+    .code { margin:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:clamp(2.4rem,12vw,3.6rem);font-weight:850;line-height:1.15;letter-spacing:.12em;font-variant-numeric:tabular-nums }
+    .timer { display:flex;align-items:center;gap:12px;width:min(100%,330px);margin:18px auto 0;color:var(--muted);font-size:.85rem }
+    .timer-track { flex:1;height:6px;overflow:hidden;border-radius:999px;background:#e8ebf2 }
+    .timer-fill { width:100%;height:100%;border-radius:inherit;background:var(--brand);transition:width .2s linear }
+    .seconds { min-width:2.3ch;color:var(--ink);font-weight:850 }
+    .code-actions { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px }
+  </style>
+</head>
+<body>
+  <main class="card" id="app-card">
+    <div class="brand-row">
+      <div class="brand-info">
+        <div class="symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 4.7 6v5.3c0 4.8 3 8.2 7.3 9.9 4.3-1.7 7.3-5.1 7.3-9.9V6L12 2.8Z"></path><path d="M9.4 12.3a2.6 2.6 0 1 1 4.6 1.6v2.3h-4v-2.3a2.6 2.6 0 0 1-.6-1.6Z"></path></svg></div>
+        <div><p class="brand-name">Authentificateur</p><p class="local-label">Chiffré dans IndexedDB</p></div>
+      </div>
+      <button id="lock-btn" class="secondary-btn">Verrouiller</button>
+    </div>
+
+    <!-- AUTHENTIFICATION -->
+    <section id="auth-panel">
+      <p class="eyebrow">Sécurité</p>
+      <h1>Déverrouiller le coffre</h1>
+      <p class="intro">Entrez votre mot de passe maître pour déchiffrer vos clés TOTP.</p>
+      <form id="auth-form" novalidate>
+        <div class="form-group">
+          <label for="master-password">Mot de passe maître</label>
+          <input class="input-field" id="master-password" type="password" required autofocus placeholder="••••••••••••">
+        </div>
+        <button class="primary" type="submit">Déverrouiller</button>
+      </form>
+    </section>
+
+    <!-- VAULT -->
+    <section id="vault-panel" hidden>
+      <div class="vault-header">
+        <div>
+          <p class="eyebrow">Coffre fort</p>
+          <h1>Vos clés MFA</h1>
+        </div>
+        <div class="vault-actions">
+          <button class="secondary-btn" id="scan-qr-btn" type="button">Scanner un QR</button>
+          <button class="secondary-btn" id="show-add-btn" type="button">+ Ajouter</button>
+        </div>
+      </div>
+      <ul class="key-list" id="key-list"></ul>
+    </section>
+
+    <!-- SCANNER -->
+    <section id="scanner-panel" hidden>
+      <p class="eyebrow">Nouvelle clé</p>
+      <h1>Scanner un QR TOTP</h1>
+      <p class="intro">Choisissez une image, partagez votre écran ou utilisez la webcam.</p>
+      <div class="scanner-preview" id="scanner-drop-zone">
+        <div class="scanner-placeholder" id="scanner-placeholder"><strong>Déposez une image ici</strong></div>
+        <video id="scanner-video" autoplay muted playsinline hidden></video>
+      </div>
+      <div class="scanner-actions">
+        <button class="secondary-btn" id="scanner-image-btn" type="button">Image</button>
+        <button class="secondary-btn" id="scanner-screen-btn" type="button">Écran</button>
+        <button class="secondary-btn" id="scanner-webcam-btn" type="button">Webcam</button>
+      </div>
+      <button class="secondary-btn scanner-stop" id="scanner-stop-btn" type="button" hidden>Arrêter le flux vidéo</button>
+      <button class="secondary-btn" id="scanner-cancel-btn" type="button" style="width:100%;margin-top:8px">Retour</button>
+    </section>
+
+    <!-- AJOUT MANUEL -->
+    <section id="add-panel" hidden>
+      <p class="eyebrow">Nouvelle clé</p>
+      <h1>Enregistrer une clé</h1>
+      <form id="add-form" novalidate>
+        <div class="form-group">
+          <label for="key-name">Nom du compte / Service</label>
+          <input class="input-field" id="key-name" type="text" placeholder="ex: Google" required>
+        </div>
+        <div class="form-group">
+          <label for="key-secret">Clé secrète ou URI otpauth://</label>
+          <input class="input-field mono" id="key-secret" type="text" placeholder="JBSW Y3DP EHPK 3PXP" required>
+        </div>
+        <button class="primary" type="submit">Enregistrer</button>
+        <button class="secondary-btn" id="cancel-add-btn" type="button" style="width:100%; margin-top:8px;">Annuler</button>
+      </form>
+    </section>
+
+    <!-- CODE ACTIF -->
+    <section class="code-panel" id="code-panel" hidden>
+      <p class="eyebrow">Code actif</p>
+      <p class="account" id="account-name">Compte</p>
+      <p class="issuer" id="issuer-name">Service</p>
+      <p class="code" id="totp-code">------</p>
+      <div class="timer">
+        <div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>
+        <span class="seconds"><span id="seconds">30</span>s</span>
+      </div>
+      <div class="code-actions">
+        <button class="secondary-btn" id="copy-code" type="button">Copier</button>
+        <button class="secondary-btn" id="back-vault-btn" type="button">Retour aux clés</button>
+      </div>
+    </section>
+
+    <input id="qr-image-input" type="file" accept="image/*">
+    <canvas id="qr-canvas" hidden></canvas>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+      const $ = id => document.getElementById(id);
+      let activeStream = null;
+      let scanAnimationId = null;
+
+      const panels = ['auth-panel', 'vault-panel', 'scanner-panel', 'add-panel', 'code-panel'];
+      function showPanel(panelId) {
+        stopStream();
+        panels.forEach(id => {
+          const el = $(id);
+          if (el) el.hidden = (id !== panelId);
+        });
+      }
+
+      function stopStream() {
+        if (scanAnimationId) cancelAnimationFrame(scanAnimationId);
+        if (activeStream) {
+          activeStream.getTracks().forEach(t => t.stop());
+          activeStream = null;
+        }
+        $('scanner-video').hidden = true;
+        $('scanner-placeholder').hidden = false;
+        $('scanner-stop-btn').hidden = true;
+      }
+
+      function processQRCode(data) {
+        if (!data) return;
+        if (data.startsWith('otpauth://')) {
+          try {
+            const url = new URL(data);
+            const secret = url.searchParams.get('secret');
+            const label = decodeURIComponent(url.pathname.replace(/^\/\/?/, ''));
+            if (secret) {
+              $('key-name').value = label || 'Service';
+              $('key-secret').value = secret;
+              showPanel('add-panel');
+              return;
+            }
+          } catch(e) {}
+        }
+        $('key-secret').value = data;
+        showPanel('add-panel');
+      }
+
+      function scanVideoFrame() {
+        const video = $('scanner-video');
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          const canvas = $('qr-canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code && code.data) {
+            processQRCode(code.data);
+            return;
+          }
+        }
+        scanAnimationId = requestAnimationFrame(scanVideoFrame);
+      }
+
+      async function startMediaStream(getMediaFn) {
+        try {
+          stopStream();
+          activeStream = await getMediaFn();
+          const video = $('scanner-video');
+          video.srcObject = activeStream;
+          video.hidden = false;
+          $('scanner-placeholder').hidden = true;
+          $('scanner-stop-btn').hidden = false;
+          video.play();
+          scanAnimationId = requestAnimationFrame(scanVideoFrame);
+        } catch (err) {
+          console.error("Erreur d'accès média :", err);
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        showPanel('auth-panel');
+
+        $('auth-form').addEventListener('submit', (e) => {
+          e.preventDefault();
+          showPanel('vault-panel');
+        });
+
+        $('scan-qr-btn').addEventListener('click', () => showPanel('scanner-panel'));
+        $('show-add-btn').addEventListener('click', () => showPanel('add-panel'));
+        $('scanner-cancel-btn').addEventListener('click', () => showPanel('vault-panel'));
+        $('cancel-add-btn').addEventListener('click', () => showPanel('vault-panel'));
+        $('back-vault-btn').addEventListener('click', () => showPanel('vault-panel'));
+        $('lock-btn').addEventListener('click', () => showPanel('auth-panel'));
+
+        // Options de Scan
+        $('scanner-image-btn').addEventListener('click', () => $('qr-image-input').click());
+        
+        $('scanner-webcam-btn').addEventListener('click', () => {
+          startMediaStream(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }));
+        });
+
+        $('scanner-screen-btn').addEventListener('click', () => {
+          startMediaStream(() => navigator.mediaDevices.getDisplayMedia({ video: true }));
+        });
+
+        $('scanner-stop-btn').addEventListener('click', stopStream);
+
+        // Analyse image importée
+        $('qr-image-input').addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const img = new Image();
+          img.onload = () => {
+            const canvas = $('qr-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code && code.data) processQRCode(code.data);
+          };
+          img.src = URL.createObjectURL(file);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
