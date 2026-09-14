@@ -60,6 +60,9 @@ body {
     font-size: 21px;
     font-weight: 700;
     margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .search {
@@ -105,6 +108,12 @@ button:hover,
 
 .danger {
     color: var(--danger);
+}
+
+.icon-btn {
+    background: transparent;
+    padding: 4px 8px;
+    font-size: 16px;
 }
 
 .notes-list {
@@ -230,6 +239,83 @@ button:hover,
 }
 
 /* --------------------------------------------------
+   Fenêtre Modale Git
+-------------------------------------------------- */
+
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.modal-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal {
+    background: var(--panel);
+    width: 100%;
+    max-width: 450px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 20px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.modal-title {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.form-group {
+    margin-bottom: 12px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.form-group input {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 14px;
+    outline: none;
+}
+
+.form-group input:focus {
+    border-color: var(--accent);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+/* --------------------------------------------------
    Menu mobile
 -------------------------------------------------- */
 
@@ -292,11 +378,11 @@ button:hover,
 
 <aside class="sidebar">
 
-
 <div class="sidebar-header">
 
     <div class="app-title">
-        Mes notes
+        <span>Mes notes</span>
+        <button id="openGitConfig" class="icon-btn" type="button" title="Configuration Git">⚙️</button>
     </div>
 
     <input
@@ -360,7 +446,6 @@ button:hover,
 
 <div id="notesList" class="notes-list"></div>
 
-
 </aside>
 
 <!-- ==================================================
@@ -368,7 +453,6 @@ button:hover,
 ================================================== -->
 
 <main class="editor">
-
 
 <header class="editor-header">
 
@@ -415,7 +499,6 @@ button:hover,
 
 </section>
 
-
 </main>
 
 <!-- ==================================================
@@ -423,7 +506,6 @@ button:hover,
 ================================================== -->
 
 <div id="empty" class="empty">
-
 
 <div class="empty-inner">
 
@@ -443,7 +525,41 @@ button:hover,
 
 </div>
 
+</div>
 
+<!-- ==================================================
+     MODALE DE CONFIGURATION GIT
+================================================== -->
+
+<div id="gitModal" class="modal-backdrop">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title">Configuration GitHub API</div>
+            <button id="closeGitModal" class="icon-btn" type="button">✕</button>
+        </div>
+        <form id="gitConfigForm">
+            <div class="form-group">
+                <label for="gitOwner">Utilisateur / Organisation (owner)</label>
+                <input type="text" id="gitOwner" placeholder="ex: octocat" required>
+            </div>
+            <div class="form-group">
+                <label for="gitRepo">Dépôt (repo)</label>
+                <input type="text" id="gitRepo" placeholder="ex: mes-notes" required>
+            </div>
+            <div class="form-group">
+                <label for="gitPath">Chemin du fichier JSON dans le dépôt (path)</label>
+                <input type="text" id="gitPath" placeholder="ex: notes.json" required>
+            </div>
+            <div class="form-group">
+                <label for="gitToken">Personal Access Token (PAT)</label>
+                <input type="password" id="gitToken" placeholder="ghp_xxxxxxxxxxxx" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" id="cancelGitConfig">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script>
@@ -451,14 +567,14 @@ button:hover,
 
 /*
  * =====================================================
- * Configuration IndexedDB & REST Sync
+ * Configuration IndexedDB & GitHub Rest API
  * =====================================================
  */
 
 const DB_NAME = "StandaloneNotesDB";
-const DB_VERSION = 1;
-const STORE_NAME = "notes";
-const REST_URL = "http://jpcrevoisier.free.fr/rest/?/notes/notes.json";
+const DB_VERSION = 2;
+const STORE_NOTES = "notes";
+const STORE_CONFIG = "config";
 
 let db = null;
 let currentNoteId = null;
@@ -479,6 +595,12 @@ const contentInput = document.getElementById("content");
 const status = document.getElementById("status");
 const empty = document.getElementById("empty");
 const editor = document.querySelector(".editor");
+
+const gitModal = document.getElementById("gitModal");
+const openGitConfigBtn = document.getElementById("openGitConfig");
+const closeGitModalBtn = document.getElementById("closeGitModal");
+const cancelGitConfigBtn = document.getElementById("cancelGitConfig");
+const gitConfigForm = document.getElementById("gitConfigForm");
 
 
 /*
@@ -501,10 +623,10 @@ function openDatabase() {
 
             const database = event.target.result;
 
-            if (!database.objectStoreNames.contains(STORE_NAME)) {
+            if (!database.objectStoreNames.contains(STORE_NOTES)) {
 
                 const store = database.createObjectStore(
-                    STORE_NAME,
+                    STORE_NOTES,
                     {
                         keyPath: "id"
                     }
@@ -517,6 +639,10 @@ function openDatabase() {
                         unique: false
                     }
                 );
+            }
+
+            if (!database.objectStoreNames.contains(STORE_CONFIG)) {
+                database.createObjectStore(STORE_CONFIG);
             }
         };
 
@@ -532,7 +658,7 @@ function openDatabase() {
 
 /*
  * =====================================================
- * Accès IndexedDB
+ * Accès IndexedDB (Notes & Configuration Git)
  * =====================================================
  */
 
@@ -541,11 +667,11 @@ function getAllNotes() {
     return new Promise((resolve, reject) => {
 
         const transaction = db.transaction(
-            STORE_NAME,
+            STORE_NOTES,
             "readonly"
         );
 
-        const store = transaction.objectStore(STORE_NAME);
+        const store = transaction.objectStore(STORE_NOTES);
 
         const request = store.getAll();
 
@@ -570,12 +696,12 @@ function getNote(id) {
     return new Promise((resolve, reject) => {
 
         const transaction = db.transaction(
-            STORE_NAME,
+            STORE_NOTES,
             "readonly"
         );
 
         const request =
-            transaction.objectStore(STORE_NAME).get(id);
+            transaction.objectStore(STORE_NOTES).get(id);
 
         request.onsuccess = () => {
             resolve(request.result);
@@ -593,11 +719,11 @@ function saveNote(note) {
     return new Promise((resolve, reject) => {
 
         const transaction = db.transaction(
-            STORE_NAME,
+            STORE_NOTES,
             "readwrite"
         );
 
-        transaction.objectStore(STORE_NAME).put(note);
+        transaction.objectStore(STORE_NOTES).put(note);
 
         transaction.oncomplete = () => {
             resolve();
@@ -615,11 +741,11 @@ function deleteNoteFromDB(id) {
     return new Promise((resolve, reject) => {
 
         const transaction = db.transaction(
-            STORE_NAME,
+            STORE_NOTES,
             "readwrite"
         );
 
-        transaction.objectStore(STORE_NAME).delete(id);
+        transaction.objectStore(STORE_NOTES).delete(id);
 
         transaction.oncomplete = () => {
             resolve();
@@ -632,72 +758,154 @@ function deleteNoteFromDB(id) {
 }
 
 
+function getGitConfig() {
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction(STORE_CONFIG, "readonly");
+        const store = transaction.objectStore(STORE_CONFIG);
+        const request = store.get("github");
+
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+
+function saveGitConfig(config) {
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction(STORE_CONFIG, "readwrite");
+        const store = transaction.objectStore(STORE_CONFIG);
+        store.put(config, "github");
+
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+    });
+}
+
+
 /*
  * =====================================================
- * Synchronisation REST (GET / PUT / POST)
+ * Synchronisation GitHub (Fetch / Push)
  * =====================================================
  */
 
 async function fetchRemoteNotes() {
 
-    const response = await fetch(REST_URL, {
+    const config = await getGitConfig();
+
+    if (!config || !config.owner || !config.repo || !config.path || !config.token) {
+        throw new Error("Configuration GitHub incomplète. Cliquez sur le bouton ⚙️ pour configurer.");
+    }
+
+    const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
+
+    const response = await fetch(url, {
         method: "GET",
         headers: {
-            "Accept": "application/json"
+            "Authorization": `token ${config.token}`,
+            "Accept": "application/vnd.github.v3+json"
         }
     });
 
+    if (response.status === 404) {
+        // Le fichier n'existe pas encore sur le dépôt distant
+        return { notes: [], sha: null };
+    }
+
     if (!response.ok) {
-        throw new Error(`Erreur serveur GET: ${response.status}`);
+        throw new Error(`Erreur GitHub GET (${response.status})`);
     }
 
-    const data = await response.json();
+    const fileData = await response.json();
+    
+    // Décodage du contenu Base64 (gestion UTF-8)
+    const binary = atob(fileData.content.replace(/\s/g, ''));
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const jsonText = new TextDecoder().decode(bytes);
 
+    const data = JSON.parse(jsonText);
+
+    let notes = [];
     if (Array.isArray(data)) {
-        return data;
+        notes = data;
     } else if (data && Array.isArray(data.notes)) {
-        return data.notes;
+        notes = data.notes;
     }
 
-    return [];
+    return { notes, sha: fileData.sha };
 }
 
 
-async function pushRemoteNotes(notes) {
+async function pushRemoteNotes(notes, sha = null) {
 
-    const payload = JSON.stringify({
+    const config = await getGitConfig();
+
+    if (!config || !config.owner || !config.repo || !config.path || !config.token) {
+        throw new Error("Configuration GitHub incomplète.");
+    }
+
+    const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
+
+    // Récupérer le SHA distant s'il n'est pas fourni
+    if (!sha) {
+        try {
+            const checkResponse = await fetch(url, {
+                headers: {
+                    "Authorization": `token ${config.token}`,
+                    "Accept": "application/vnd.github.v3+json"
+                }
+            });
+            if (checkResponse.ok) {
+                const fileData = await checkResponse.json();
+                sha = fileData.sha;
+            }
+        } catch (e) {
+            console.warn("Impossible de vérifier le SHA distant avant push :", e);
+        }
+    }
+
+    const payloadObj = {
         format: "standalone-notes",
         version: 1,
         updatedAt: new Date().toISOString(),
         notes: notes
-    });
+    };
 
-    try {
-        const response = await fetch(REST_URL, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: payload
-        });
+    const payloadText = JSON.stringify(payloadObj, null, 2);
 
-        if (response.ok) {
-            return;
-        }
-    } catch (e) {
-        console.warn("PUT échoué, tentative via POST...", e);
+    // Encodage Base64 sécurisé pour l'UTF-8
+    const bytes = new TextEncoder().encode(payloadText);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    const contentEncoded = btoa(binary);
+
+    const bodyData = {
+        message: `sync notes: ${new Date().toLocaleString('fr-FR')}`,
+        content: contentEncoded
+    };
+
+    if (sha) {
+        bodyData.sha = sha;
     }
 
-    const responsePost = await fetch(REST_URL, {
-        method: "POST",
+    const response = await fetch(url, {
+        method: "PUT",
         headers: {
-            "Content-Type": "application/json"
+            "Authorization": `token ${config.token}`,
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.github.v3+json"
         },
-        body: payload
+        body: JSON.stringify(bodyData)
     });
 
-    if (!responsePost.ok) {
-        throw new Error(`Erreur serveur PUT/POST: ${responsePost.status}`);
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Erreur GitHub PUT (${response.status}): ${errorData.message}`);
     }
 }
 
@@ -705,6 +913,14 @@ async function pushRemoteNotes(notes) {
 async function syncNotes(silent = false) {
 
     if (!navigator.onLine || isSyncing) {
+        return;
+    }
+
+    const config = await getGitConfig();
+    if (!config) {
+        if (!silent) {
+            openGitModal();
+        }
         return;
     }
 
@@ -720,11 +936,14 @@ async function syncNotes(silent = false) {
 
         const localNotes = await getAllNotes();
         let remoteNotes = [];
+        let remoteSha = null;
 
         try {
-            remoteNotes = await fetchRemoteNotes();
+            const remoteResult = await fetchRemoteNotes();
+            remoteNotes = remoteResult.notes;
+            remoteSha = remoteResult.sha;
         } catch (e) {
-            console.warn("Impossible de récupérer les notes distantes :", e);
+            console.warn("Impossible de récuperer les notes distantes :", e);
         }
 
         const notesMap = new Map();
@@ -752,7 +971,7 @@ async function syncNotes(silent = false) {
             await saveNote(note);
         }
 
-        await pushRemoteNotes(mergedNotes);
+        await pushRemoteNotes(mergedNotes, remoteSha);
 
         await renderNotes();
 
@@ -790,6 +1009,46 @@ function triggerAutoSync() {
         syncNotes(true);
     }, 1000);
 }
+
+
+/*
+ * =====================================================
+ * Gestion Modale de configuration Git
+ * =====================================================
+ */
+
+async function openGitModal() {
+    const config = await getGitConfig();
+    if (config) {
+        document.getElementById("gitOwner").value = config.owner || "";
+        document.getElementById("gitRepo").value = config.repo || "";
+        document.getElementById("gitPath").value = config.path || "";
+        document.getElementById("gitToken").value = config.token || "";
+    }
+    gitModal.classList.add("active");
+}
+
+function closeGitModal() {
+    gitModal.classList.remove("active");
+}
+
+openGitConfigBtn.addEventListener("click", openGitModal);
+closeGitModalBtn.addEventListener("click", closeGitModal);
+cancelGitConfigBtn.addEventListener("click", closeGitModal);
+
+gitConfigForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const config = {
+        owner: document.getElementById("gitOwner").value.trim(),
+        repo: document.getElementById("gitRepo").value.trim(),
+        path: document.getElementById("gitPath").value.trim(),
+        token: document.getElementById("gitToken").value.trim()
+    };
+    await saveGitConfig(config);
+    closeGitModal();
+    alert("Configuration Git enregistrée dans IndexedDB !");
+    syncNotes(false);
+});
 
 
 /*
