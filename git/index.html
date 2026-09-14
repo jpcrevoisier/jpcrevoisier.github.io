@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>💾</text></svg>">
+    <title>Git Web Pusher</title>
+    <style>
+        /* Styles de l'interface utilisateur */
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+        input[type="text"], input[type="password"], textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 120px;
+            resize: vertical;
+        }
+        button {
+            background-color: #0366d6;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover {
+            background-color: #0255b3;
+        }
+        #status {
+            padding: 0.75rem;
+            border-radius: 4px;
+            display: none;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Configuration GitHub (Stockée en IndexedDB)</h2>
+        <form id="config-form">
+            <div class="form-group">
+                <label for="owner">Utilisateur / Organisation (owner) :</label>
+                <input type="text" id="owner" required placeholder="ex: octocat">
+            </div>
+            <div class="form-group">
+                <label for="repo">Dépôt (repo) :</label>
+                <input type="text" id="repo" required placeholder="ex: mon-projet">
+            </div>
+            <div class="form-group">
+                <label for="token">Personal Access Token (PAT) :</label>
+                <input type="password" id="token" required placeholder="ghp_xxxxxxxxxxxx">
+            </div>
+            <button type="submit">Enregistrer la configuration</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Pousser un fichier</h2>
+        <form id="push-form">
+            <div class="form-group">
+                <label for="path">Chemin du fichier (path) :</label>
+                <input type="text" id="path" required placeholder="ex: dossier/mon-fichier.txt">
+            </div>
+            <div class="form-group">
+                <label for="message">Message de commit :</label>
+                <input type="text" id="message" required placeholder="ex: Mise à jour via l'application web">
+            </div>
+            <div class="form-group">
+                <label for="content">Contenu du fichier :</label>
+                <textarea id="content" required placeholder="Écrivez le contenu ici..."></textarea>
+            </div>
+            <button type="submit">Envoyer sur GitHub</button>
+        </form>
+    </div>
+
+    <div id="status"></div>
+
+    <script>
+        // --- 1. GESTION DE LA BASE DE DONNÉES INDEXEDDB ---
+        const DB_NAME = 'GitPusherDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'config';
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME);
+                    }
+                };
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = (e) => reject(e.target.error);
+            });
+        }
+
+        async function saveConfig(config) {
+            const db = await openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                const store = tx.objectStore(STORE_NAME);
+                store.put(config, 'github_settings');
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => reject(e.target.error);
+            });
+        }
+
+        async function getConfig() {
+            const db = await openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const request = store.get('github_settings');
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = (e) => reject(e.target.error);
+            });
+        }
+
+        // --- 2. INITIALISATION ET CHARGEMENT DE LA CONFIGURATION ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const config = await getConfig();
+            if (config) {
+                document.getElementById('owner').value = config.owner || '';
+                document.getElementById('repo').value = config.repo || '';
+                document.getElementById('token').value = config.token || '';
+            }
+        });
+
+        // Enregistrement des paramètres dans IndexedDB
+        document.getElementById('config-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const config = {
+                owner: document.getElementById('owner').value.trim(),
+                repo: document.getElementById('repo').value.trim(),
+                token: document.getElementById('token').value.trim()
+            };
+            try {
+                await saveConfig(config);
+                showStatus('Configuration enregistrée dans IndexedDB !', 'success');
+            } catch (err) {
+                showStatus('Erreur lors de la sauvegarde : ' + err.message, 'error');
+            }
+        });
+
+        // --- 3. ENVOI DU FICHIER VIA L'API GITHUB ---
+        document.getElementById('push-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const config = await getConfig();
+            if (!config || !config.token || !config.owner || !config.repo) {
+                showStatus('Veuillez d\'abord enregistrer la configuration GitHub.', 'error');
+                return;
+            }
+
+            const path = document.getElementById('path').value.trim();
+            const message = document.getElementById('message').value.trim();
+            const content = document.getElementById('content').value;
+
+            showStatus('Vérification et envoi en cours...', 'success');
+
+            try {
+                // Étape A : Récupérer le SHA du fichier s'il existe déjà
+                let sha = null;
+                const getUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
+                
+                const checkResponse = await fetch(getUrl, {
+                    headers: {
+                        'Authorization': `token ${config.token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (checkResponse.ok) {
+                    const fileData = await checkResponse.json();
+                    sha = fileData.sha;
+                }
+
+                // Étape B : Encodage du contenu en UTF-8 puis Base64 (support des caractères accentués)
+                const bytes = new TextEncoder().encode(content);
+                let binary = '';
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                const contentEncoded = btoa(binary);
+
+                // Étape C : Envoi de la requête de création/mise à jour (PUT)
+                const bodyData = {
+                    message: message,
+                    content: contentEncoded
+                };
+                if (sha) {
+                    bodyData.sha = sha; // Requis uniquement pour mettre à jour un fichier existant
+                }
+
+                const putResponse = await fetch(getUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${config.token}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/vnd.github.v3+json'
+                    },
+                    body: JSON.stringify(bodyData)
+                });
+
+                const result = await putResponse.json();
+
+                if (putResponse.ok) {
+                    showStatus(`Fichier poussé avec succès ! Commit : ${result.commit.sha.substring(0, 7)}`, 'success');
+                } else {
+                    showStatus(`Erreur GitHub API : ${result.message}`, 'error');
+                }
+
+            } catch (err) {
+                showStatus(`Erreur réseau : ${err.message}`, 'error');
+            }
+        });
+
+        function showStatus(text, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = text;
+            statusDiv.className = type;
+            statusDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
