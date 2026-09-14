@@ -1,7 +1,7 @@
 Quelques fichiers html autonomes pour des petits usages / besoins ...
 
 
- - [🛡️totp](https://jpcrevoisier.github.io/totp.html)
- - [☢ QRcode](https://jpcrevoisier.github.io/qrcode.html)
- - [♻ FullScreen](https://jpcrevoisier.github.io/fullscreen.html)
- - [🔥 CodeMirror](https://jpcrevoisier.github.io/codemirror.html)
+ - [🛡️totp](https://jpcrevoisier.github.io/totp/index.html)
+ - [☢ QRcode](https://jpcrevoisier.github.io/qrcode/index.html)
+ - [♻ FullScreen](https://jpcrevoisier.github.io/fullscreen/index.html)
+ - [🔥 CodeMirror](https://jpcrevoisier.github.io/codemirror/index.html)
