@@ -7,3 +7,4 @@ Quelques fichiers html autonomes pour des petits usages / besoins ...
  - [🔥 CodeMirror](https://jpcrevoisier.github.io/codemirror/index.html)
  - [📝 Notes](https://jpcrevoisier.github.io/notes/index.html)
  - [💾 GIT ](https://jpcrevoisier.github.io/git/index.html)
+ - [🎁 Emojis ](https://jpcrevoisier.github.io/Emojis/index.html)

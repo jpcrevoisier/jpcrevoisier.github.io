@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Emojis</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>🎁</text></svg>">
+  <style>
+    body{
+      font-family: system-ui, "Noto Color Emoji", "Segoe UI Emoji", sans-serif;
+      margin: 0;
+      padding: 16px;
+    }
+    #grid{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(48px,1fr));
+      gap: 8px;
+    }
+#shower{
+  display: grid;
+  grid-template-columns: repeat(10, 48px);
+  gap: 8px;
+}
+    .cell{
+      cursor: pointer;
+      font-size: 32px;
+      background: #fafafa;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+    #status{margin-top:16px;color:#444;}
+  </style>
+</head>
+<body>
+<div id="shower"></div>
+  
+  
+  <div id="grid"></div>
+  <div id="status"></div>
+
+<script>
+// Liste de quelques plages d'emojis
+const ranges = [
+  [0x1F600, 0x1F64F], // Emoticons (visages, gestes)
+  [0x1F300, 0x1F5FF], // Symbols & Pictographs (nature, objets, signes)
+  [0x1F680, 0x1F6FF], // Transport & Map Symbols
+  [0x1F700, 0x1F77F], // Alchemical Symbols (rare, mais parfois inclus)
+  [0x1F780, 0x1F7FF], // Geometric Shapes Extended (contient quelques emojis décoratifs)
+  [0x1F800, 0x1F8FF], // Supplemental Arrows-C (quelques flèches stylisées)
+  [0x1F900, 0x1F9FF], // Supplemental Symbols and Pictographs (animaux, nourriture, objets modernes, mains, corps…)
+  [0x1FA00, 0x1FA6F], // Chess Symbols (pièces d’échecs)
+  [0x1FA70, 0x1FAFF], // Symbols and Pictographs Extended-A (hand gestures, disability symbols, etc.)
+  [0x1FB00, 0x1FBFF], // Symbols for Legacy Computing (rétro/ASCII-art style)
+  [0x2600,  0x26FF],  // Miscellaneous Symbols (météo, religion, signes astrologiques…)
+  [0x2700,  0x27BF],  // Dingbats (coeurs, flèches, symboles décoratifs)
+  [0xFE00,  0xFE0F],  // Variation Selectors (surtout VS16 : U+FE0F pour forcer emoji-style rendering)
+  [0x1F1E6, 0x1F1FF], // Regional Indicator Symbols (A–Z, pour drapeaux composés)
+  [0x1F004, 0x1F004], // Mahjong Tile Red Dragon (isolé, souvent inclus)
+  [0x1F0CF, 0x1F0CF], // Playing Card Black Joker
+];
+  
+const codepoints = [];
+for(const [s,e] of ranges){
+  for(let cp=s; cp<=e; cp++) codepoints.push(cp);
+}
+
+const grid = document.getElementById("grid");
+const status = document.getElementById("status");
+
+  let page=0;
+function showPage(page=0, perpage=10)
+{
+	buffer='';
+	if(page<0)
+	{
+		page=0;
+	}
+	if(page>Math.floor(codepoints.length/perpage))
+	{
+		page=Math.floor(codepoints.length/perpage);
+	}
+	for(i=0; i<=5; i++)
+	{
+		first=((page+i)*perpage);
+		last=(first+perpage);
+		codepoints.slice(first, last).forEach((item)=>{
+  const char = String.fromCodePoint(item);
+			if(item!='icon')
+			{
+				buffer+='<div class="cell">'+char+'</div>';
+			}
+		});
+	}
+	document.getElementById('shower').innerHTML=buffer;
+	document.querySelectorAll('div.cell').forEach((cell)=>{
+		cell.addEventListener("click", (event) => {
+			cpyCls(event.target);
+		});
+	});
+}
+function cpyCls(elm)
+{
+  console.log(elm);
+	navigator.clipboard.writeText(elm.innerHTML);
+  return true;
+}
+showPage(page);
+  
+document.getElementById('shower').addEventListener("wheel",
+	(event) => {
+		// console.log(event);
+		(event.deltaY>0)?page++:page--;
+		showPage(page);
+	});
+
+
+</script>
+
+</body>
+</html>
