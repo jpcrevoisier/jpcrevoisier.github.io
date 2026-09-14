@@ -1,1685 +1,260 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>📝</text></svg>">
-<title>Notes</title>
-
-<style>
-* {
-    box-sizing: border-box;
-}
-
-:root {
-    --bg: #f5f6f8;
-    --panel: #ffffff;
-    --border: #dcdfe4;
-    --text: #202124;
-    --muted: #6b7078;
-    --accent: #194979;
-    --accent-light: #e8f0f8;
-    --danger: #b42318;
-}
-
-html,
-body {
-    margin: 0;
-    width: 100%;
-    height: 100%;
-    font-family: Arial, Helvetica, sans-serif;
-    color: var(--text);
-    background: var(--bg);
-}
-
-body {
-    display: flex;
-    overflow: hidden;
-}
-
-/* --------------------------------------------------
-   Barre latérale
--------------------------------------------------- */
-
-.sidebar {
-    width: 320px;
-    min-width: 320px;
-    height: 100vh;
-    background: var(--panel);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-}
-
-.sidebar-header {
-    padding: 18px;
-    border-bottom: 1px solid var(--border);
-}
-
-.app-title {
-    font-size: 21px;
-    font-weight: 700;
-    margin-bottom: 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.search {
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    padding: 10px 12px;
-    font-size: 14px;
-    outline: none;
-}
-
-.search:focus {
-    border-color: var(--accent);
-}
-
-.sidebar-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 10px;
-}
-
-button,
-.file-button {
-    border: 0;
-    border-radius: 7px;
-    padding: 9px 12px;
-    font-size: 14px;
-    cursor: pointer;
-    background: #e9ebee;
-    color: var(--text);
-}
-
-button:hover,
-.file-button:hover {
-    filter: brightness(.96);
-}
-
-.primary {
-    background: var(--accent);
-    color: white;
-}
-
-.danger {
-    color: var(--danger);
-}
-
-.icon-btn {
-    background: transparent;
-    padding: 4px 8px;
-    font-size: 16px;
-}
-
-.notes-list {
-    flex: 1;
-    overflow-y: auto;
-}
-
-.note-item {
-    padding: 13px 17px;
-    border-bottom: 1px solid #eeeeee;
-    cursor: pointer;
-}
-
-.note-item:hover {
-    background: #f7f8fa;
-}
-
-.note-item.active {
-    background: var(--accent-light);
-    border-left: 4px solid var(--accent);
-    padding-left: 13px;
-}
-
-.note-item-title {
-    font-size: 15px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.note-item-preview {
-    margin-top: 5px;
-    color: var(--muted);
-    font-size: 13px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.note-item-date {
-    margin-top: 7px;
-    color: var(--muted);
-    font-size: 11px;
-}
-
-/* --------------------------------------------------
-   Éditeur
--------------------------------------------------- */
-
-.editor {
-    flex: 1;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.editor-header {
-    height: 62px;
-    min-height: 62px;
-    background: var(--panel);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 18px;
-}
-
-.title-input {
-    flex: 1;
-    border: 0;
-    outline: none;
-    font-size: 21px;
-    font-weight: 600;
-    min-width: 0;
-}
-
-.status {
-    color: var(--muted);
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-.editor-content {
-    flex: 1;
-    padding: 25px;
-    overflow: auto;
-}
-
-.content-input {
-    width: 100%;
-    min-height: 100%;
-    resize: none;
-    border: 0;
-    outline: none;
-    background: transparent;
-    color: var(--text);
-    font-family: inherit;
-    font-size: 16px;
-    line-height: 1.65;
-}
-
-/* --------------------------------------------------
-   État vide
--------------------------------------------------- */
-
-.empty {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: var(--muted);
-}
-
-.empty-inner {
-    max-width: 400px;
-}
-
-.empty-inner h2 {
-    color: var(--text);
-}
-
-/* --------------------------------------------------
-   Fenêtre Modale Git
--------------------------------------------------- */
-
-.modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-}
-
-.modal-backdrop.active {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.modal {
-    background: var(--panel);
-    width: 100%;
-    max-width: 450px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    padding: 20px;
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.modal-title {
-    font-size: 18px;
-    font-weight: 700;
-}
-
-.form-group {
-    margin-bottom: 12px;
-}
-
-.form-group label {
-    display: block;
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.form-group input {
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 10px;
-    font-size: 14px;
-    outline: none;
-}
-
-.form-group input:focus {
-    border-color: var(--accent);
-}
-
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 18px;
-}
-
-/* --------------------------------------------------
-   Menu mobile
--------------------------------------------------- */
-
-.mobile-menu {
-    display: none;
-}
-
-@media (max-width: 700px) {
-
-    .sidebar {
-        width: 100%;
-        min-width: 0;
-    }
-
-    .editor {
-        display: none;
-    }
-
-    body.editing .sidebar {
-        display: none;
-    }
-
-    body.editing .editor {
-        display: flex;
-    }
-
-    .mobile-menu {
-        display: block;
-    }
-
-    .editor-header {
-        padding-left: 10px;
-    }
-
-    .editor-content {
-        padding: 15px;
-    }
-
-    .status {
-        display: none;
-    }
-}
-
-/* --------------------------------------------------
-   Import caché
--------------------------------------------------- */
-
-#fileInput {
-    display: none;
-}
-</style>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>💾</text></svg>">
+    <title>Git Web Pusher</title>
+    <style>
+        /* Styles de l'interface utilisateur */
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+        input[type="text"], input[type="password"], textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 120px;
+            resize: vertical;
+        }
+        button {
+            background-color: #0366d6;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover {
+            background-color: #0255b3;
+        }
+        #status {
+            padding: 0.75rem;
+            border-radius: 4px;
+            display: none;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
 </head>
-
 <body>
 
-<!-- ==================================================
-     LISTE DES NOTES
-================================================== -->
-
-<aside class="sidebar">
-
-<div class="sidebar-header">
-
-    <div class="app-title">
-        <span>Mes notes</span>
-        <button id="openGitConfig" class="icon-btn" type="button" title="Configuration Git">⚙️</button>
-    </div>
-
-    <input
-        id="search"
-        class="search"
-        type="search"
-        placeholder="Rechercher..."
-        autocomplete="off"
-    >
-
-    <div class="sidebar-actions">
-
-        <button
-            id="newNote"
-            class="primary"
-            type="button"
-        >
-            + Nouvelle note
-        </button>
-
-        <button
-            id="syncNotes"
-            type="button"
-        >
-            Synchroniser
-        </button>
-
-        <button
-            id="exportAll"
-            type="button"
-        >
-            Exporter
-        </button>
-
-        <label
-            for="fileInput"
-            class="file-button"
-            style="text-align:center"
-        >
-            Importer
-        </label>
-
-        <button
-            id="deleteNote"
-            class="danger"
-            type="button"
-            style="grid-column: span 2;"
-        >
-            Supprimer
-        </button>
-
-    </div>
-
-    <input
-        id="fileInput"
-        type="file"
-        accept=".json,application/json"
-    >
-
-</div>
-
-<div id="notesList" class="notes-list"></div>
-
-</aside>
-
-<!-- ==================================================
-     ÉDITEUR
-================================================== -->
-
-<main class="editor">
-
-<header class="editor-header">
-
-    <button
-        id="backButton"
-        class="mobile-menu"
-        type="button"
-    >
-        ←
-    </button>
-
-    <input
-        id="title"
-        class="title-input"
-        type="text"
-        placeholder="Titre de la note"
-        autocomplete="off"
-    >
-
-    <span
-        id="status"
-        class="status"
-    >
-        Enregistré
-    </span>
-
-    <button
-        id="exportCurrent"
-        type="button"
-    >
-        Exporter
-    </button>
-
-</header>
-
-<section class="editor-content">
-
-    <textarea
-        id="content"
-        class="content-input"
-        placeholder="Commencez à écrire..."
-        spellcheck="true"
-    ></textarea>
-
-</section>
-
-</main>
-
-<!-- ==================================================
-     ÉTAT INITIAL
-================================================== -->
-
-<div id="empty" class="empty">
-
-<div class="empty-inner">
-
-    <h2>Aucune note sélectionnée</h2>
-
-    <p>
-        Créez une nouvelle note pour commencer.
-    </p>
-
-    <button
-        id="emptyNewNote"
-        class="primary"
-        type="button"
-    >
-        + Nouvelle note
-    </button>
-
-</div>
-
-</div>
-
-<!-- ==================================================
-     MODALE DE CONFIGURATION GIT
-================================================== -->
-
-<div id="gitModal" class="modal-backdrop">
-    <div class="modal">
-        <div class="modal-header">
-            <div class="modal-title">Configuration GitHub API</div>
-            <button id="closeGitModal" class="icon-btn" type="button">✕</button>
-        </div>
-        <form id="gitConfigForm">
+    <div class="card">
+        <h2>Configuration GitHub (Stockée en IndexedDB)</h2>
+        <form id="config-form">
             <div class="form-group">
-                <label for="gitOwner">Utilisateur / Organisation (owner)</label>
-                <input type="text" id="gitOwner" placeholder="ex: octocat" required>
+                <label for="owner">Utilisateur / Organisation (owner) :</label>
+                <input type="text" id="owner" required placeholder="ex: octocat">
             </div>
             <div class="form-group">
-                <label for="gitRepo">Dépôt (repo)</label>
-                <input type="text" id="gitRepo" placeholder="ex: mes-notes" required>
+                <label for="repo">Dépôt (repo) :</label>
+                <input type="text" id="repo" required placeholder="ex: mon-projet">
             </div>
             <div class="form-group">
-                <label for="gitPath">Chemin du fichier JSON dans le dépôt (path)</label>
-                <input type="text" id="gitPath" placeholder="ex: notes.json" required>
+                <label for="token">Personal Access Token (PAT) :</label>
+                <input type="password" id="token" required placeholder="ghp_xxxxxxxxxxxx">
             </div>
-            <div class="form-group">
-                <label for="gitToken">Personal Access Token (PAT)</label>
-                <input type="password" id="gitToken" placeholder="ghp_xxxxxxxxxxxx" required>
-            </div>
-            <div class="modal-actions">
-                <button type="button" id="cancelGitConfig">Annuler</button>
-                <button type="submit" class="primary">Enregistrer</button>
-            </div>
+            <button type="submit">Enregistrer la configuration</button>
         </form>
     </div>
-</div>
 
-<script>
-"use strict";
+    <div class="card">
+        <h2>Pousser un fichier</h2>
+        <form id="push-form">
+            <div class="form-group">
+                <label for="path">Chemin du fichier (path) :</label>
+                <input type="text" id="path" required placeholder="ex: dossier/mon-fichier.txt">
+            </div>
+            <div class="form-group">
+                <label for="message">Message de commit :</label>
+                <input type="text" id="message" required placeholder="ex: Mise à jour via l'application web">
+            </div>
+            <div class="form-group">
+                <label for="content">Contenu du fichier :</label>
+                <textarea id="content" required placeholder="Écrivez le contenu ici..."></textarea>
+            </div>
+            <button type="submit">Envoyer sur GitHub</button>
+        </form>
+    </div>
 
-/*
- * =====================================================
- * Configuration IndexedDB & GitHub Rest API
- * =====================================================
- */
+    <div id="status"></div>
 
-const DB_NAME = "StandaloneNotesDB";
-const DB_VERSION = 2;
-const STORE_NOTES = "notes";
-const STORE_CONFIG = "config";
+    <script>
+        // --- 1. GESTION DE LA BASE DE DONNÉES INDEXEDDB ---
+        const DB_NAME = 'GitPusherDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'config';
 
-let db = null;
-let currentNoteId = null;
-let syncTimer = null;
-let isSyncing = false;
-
-
-/*
- * =====================================================
- * Éléments DOM
- * =====================================================
- */
-
-const notesList = document.getElementById("notesList");
-const searchInput = document.getElementById("search");
-const titleInput = document.getElementById("title");
-const contentInput = document.getElementById("content");
-const status = document.getElementById("status");
-const empty = document.getElementById("empty");
-const editor = document.querySelector(".editor");
-
-const gitModal = document.getElementById("gitModal");
-const openGitConfigBtn = document.getElementById("openGitConfig");
-const closeGitModalBtn = document.getElementById("closeGitModal");
-const cancelGitConfigBtn = document.getElementById("cancelGitConfig");
-const gitConfigForm = document.getElementById("gitConfigForm");
-
-
-/*
- * =====================================================
- * Initialisation IndexedDB
- * =====================================================
- */
-
-function openDatabase() {
-
-    return new Promise((resolve, reject) => {
-
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onerror = () => {
-            reject(request.error);
-        };
-
-        request.onupgradeneeded = event => {
-
-            const database = event.target.result;
-
-            if (!database.objectStoreNames.contains(STORE_NOTES)) {
-
-                const store = database.createObjectStore(
-                    STORE_NOTES,
-                    {
-                        keyPath: "id"
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME);
                     }
-                );
-
-                store.createIndex(
-                    "updatedAt",
-                    "updatedAt",
-                    {
-                        unique: false
-                    }
-                );
-            }
-
-            if (!database.objectStoreNames.contains(STORE_CONFIG)) {
-                database.createObjectStore(STORE_CONFIG);
-            }
-        };
-
-        request.onsuccess = () => {
-
-            db = request.result;
-
-            resolve(db);
-        };
-    });
-}
-
-
-/*
- * =====================================================
- * Accès IndexedDB (Notes & Configuration Git)
- * =====================================================
- */
-
-function getAllNotes() {
-
-    return new Promise((resolve, reject) => {
-
-        const transaction = db.transaction(
-            STORE_NOTES,
-            "readonly"
-        );
-
-        const store = transaction.objectStore(STORE_NOTES);
-
-        const request = store.getAll();
-
-        request.onsuccess = () => {
-
-            const notes = request.result.sort(
-                (a, b) => b.updatedAt - a.updatedAt
-            );
-
-            resolve(notes);
-        };
-
-        request.onerror = () => {
-            reject(request.error);
-        };
-    });
-}
-
-
-function getNote(id) {
-
-    return new Promise((resolve, reject) => {
-
-        const transaction = db.transaction(
-            STORE_NOTES,
-            "readonly"
-        );
-
-        const request =
-            transaction.objectStore(STORE_NOTES).get(id);
-
-        request.onsuccess = () => {
-            resolve(request.result);
-        };
-
-        request.onerror = () => {
-            reject(request.error);
-        };
-    });
-}
-
-
-function saveNote(note) {
-
-    return new Promise((resolve, reject) => {
-
-        const transaction = db.transaction(
-            STORE_NOTES,
-            "readwrite"
-        );
-
-        transaction.objectStore(STORE_NOTES).put(note);
-
-        transaction.oncomplete = () => {
-            resolve();
-        };
-
-        transaction.onerror = () => {
-            reject(transaction.error);
-        };
-    });
-}
-
-
-function deleteNoteFromDB(id) {
-
-    return new Promise((resolve, reject) => {
-
-        const transaction = db.transaction(
-            STORE_NOTES,
-            "readwrite"
-        );
-
-        transaction.objectStore(STORE_NOTES).delete(id);
-
-        transaction.oncomplete = () => {
-            resolve();
-        };
-
-        transaction.onerror = () => {
-            reject(transaction.error);
-        };
-    });
-}
-
-
-function getGitConfig() {
-
-    return new Promise((resolve, reject) => {
-
-        const transaction = db.transaction(STORE_CONFIG, "readonly");
-        const store = transaction.objectStore(STORE_CONFIG);
-        const request = store.get("github");
-
-        request.onsuccess = () => resolve(request.result || null);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-
-function saveGitConfig(config) {
-
-    return new Promise((resolve, reject) => {
-
-        const transaction = db.transaction(STORE_CONFIG, "readwrite");
-        const store = transaction.objectStore(STORE_CONFIG);
-        store.put(config, "github");
-
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-    });
-}
-
-
-/*
- * =====================================================
- * Synchronisation GitHub (Fetch / Push)
- * =====================================================
- */
-
-async function fetchRemoteNotes() {
-
-    const config = await getGitConfig();
-
-    if (!config || !config.owner || !config.repo || !config.path || !config.token) {
-        throw new Error("Configuration GitHub incomplète. Cliquez sur le bouton ⚙️ pour configurer.");
-    }
-
-    const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
-
-    const response = await fetch(url, {
-        method: "GET",
-        headers: {
-            "Authorization": `token ${config.token}`,
-            "Accept": "application/vnd.github.v3+json"
-        }
-    });
-
-    if (response.status === 404) {
-        // Le fichier n'existe pas encore sur le dépôt distant
-        return { notes: [], sha: null };
-    }
-
-    if (!response.ok) {
-        throw new Error(`Erreur GitHub GET (${response.status})`);
-    }
-
-    const fileData = await response.json();
-    
-    // Décodage du contenu Base64 (gestion UTF-8)
-    const binary = atob(fileData.content.replace(/\s/g, ''));
-    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-    const jsonText = new TextDecoder().decode(bytes);
-
-    const data = JSON.parse(jsonText);
-
-    let notes = [];
-    if (Array.isArray(data)) {
-        notes = data;
-    } else if (data && Array.isArray(data.notes)) {
-        notes = data.notes;
-    }
-
-    return { notes, sha: fileData.sha };
-}
-
-
-async function pushRemoteNotes(notes, sha = null) {
-
-    const config = await getGitConfig();
-
-    if (!config || !config.owner || !config.repo || !config.path || !config.token) {
-        throw new Error("Configuration GitHub incomplète.");
-    }
-
-    const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
-
-    // Récupérer le SHA distant s'il n'est pas fourni
-    if (!sha) {
-        try {
-            const checkResponse = await fetch(url, {
-                headers: {
-                    "Authorization": `token ${config.token}`,
-                    "Accept": "application/vnd.github.v3+json"
-                }
+                };
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = (e) => reject(e.target.error);
             });
-            if (checkResponse.ok) {
-                const fileData = await checkResponse.json();
-                sha = fileData.sha;
+        }
+
+        async function saveConfig(config) {
+            const db = await openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                const store = tx.objectStore(STORE_NAME);
+                store.put(config, 'github_settings');
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => reject(e.target.error);
+            });
+        }
+
+        async function getConfig() {
+            const db = await openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const request = store.get('github_settings');
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = (e) => reject(e.target.error);
+            });
+        }
+
+        // --- 2. INITIALISATION ET CHARGEMENT DE LA CONFIGURATION ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const config = await getConfig();
+            if (config) {
+                document.getElementById('owner').value = config.owner || '';
+                document.getElementById('repo').value = config.repo || '';
+                document.getElementById('token').value = config.token || '';
             }
-        } catch (e) {
-            console.warn("Impossible de vérifier le SHA distant avant push :", e);
-        }
-    }
+        });
 
-    const payloadObj = {
-        format: "standalone-notes",
-        version: 1,
-        updatedAt: new Date().toISOString(),
-        notes: notes
-    };
-
-    const payloadText = JSON.stringify(payloadObj, null, 2);
-
-    // Encodage Base64 sécurisé pour l'UTF-8
-    const bytes = new TextEncoder().encode(payloadText);
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    const contentEncoded = btoa(binary);
-
-    const bodyData = {
-        message: `sync notes: ${new Date().toLocaleString('fr-FR')}`,
-        content: contentEncoded
-    };
-
-    if (sha) {
-        bodyData.sha = sha;
-    }
-
-    const response = await fetch(url, {
-        method: "PUT",
-        headers: {
-            "Authorization": `token ${config.token}`,
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.github.v3+json"
-        },
-        body: JSON.stringify(bodyData)
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Erreur GitHub PUT (${response.status}): ${errorData.message}`);
-    }
-}
-
-
-async function syncNotes(silent = false) {
-
-    if (!navigator.onLine || isSyncing) {
-        return;
-    }
-
-    const config = await getGitConfig();
-    if (!config) {
-        if (!silent) {
-            openGitModal();
-        }
-        return;
-    }
-
-    isSyncing = true;
-    const syncBtn = document.getElementById("syncNotes");
-    const originalText = syncBtn.textContent;
-
-    try {
-
-        syncBtn.textContent = "Sync...";
-        syncBtn.disabled = true;
-        if (!silent) status.textContent = "Synchronisation...";
-
-        const localNotes = await getAllNotes();
-        let remoteNotes = [];
-        let remoteSha = null;
-
-        try {
-            const remoteResult = await fetchRemoteNotes();
-            remoteNotes = remoteResult.notes;
-            remoteSha = remoteResult.sha;
-        } catch (e) {
-            console.warn("Impossible de récuperer les notes distantes :", e);
-        }
-
-        const notesMap = new Map();
-
-        for (const note of localNotes) {
-            notesMap.set(note.id, note);
-        }
-
-        for (const remote of remoteNotes) {
-
-            if (!remote || !remote.id) {
-                continue;
+        // Enregistrement des paramètres dans IndexedDB
+        document.getElementById('config-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const config = {
+                owner: document.getElementById('owner').value.trim(),
+                repo: document.getElementById('repo').value.trim(),
+                token: document.getElementById('token').value.trim()
+            };
+            try {
+                await saveConfig(config);
+                showStatus('Configuration enregistrée dans IndexedDB !', 'success');
+            } catch (err) {
+                showStatus('Erreur lors de la sauvegarde : ' + err.message, 'error');
             }
-
-            const local = notesMap.get(remote.id);
-
-            if (!local || (remote.updatedAt && remote.updatedAt > local.updatedAt)) {
-                notesMap.set(remote.id, remote);
-            }
-        }
-
-        const mergedNotes = Array.from(notesMap.values());
-
-        for (const note of mergedNotes) {
-            await saveNote(note);
-        }
-
-        await pushRemoteNotes(mergedNotes, remoteSha);
-
-        await renderNotes();
-
-        if (currentNoteId && notesMap.has(currentNoteId)) {
-            await openNote(currentNoteId);
-        }
-
-        status.textContent = "Enregistré";
-
-        if (!silent) {
-            alert("Synchronisation réussie !");
-        }
-
-    } catch (error) {
-
-        console.error(error);
-        if (!silent) {
-            alert("Échec de la synchronisation : " + error.message);
-        }
-
-    } finally {
-
-        syncBtn.textContent = originalText;
-        syncBtn.disabled = false;
-        isSyncing = false;
-    }
-}
-
-
-function triggerAutoSync() {
-
-    clearTimeout(syncTimer);
-
-    syncTimer = setTimeout(() => {
-        syncNotes(true);
-    }, 1000);
-}
-
-
-/*
- * =====================================================
- * Gestion Modale de configuration Git
- * =====================================================
- */
-
-async function openGitModal() {
-    const config = await getGitConfig();
-    if (config) {
-        document.getElementById("gitOwner").value = config.owner || "";
-        document.getElementById("gitRepo").value = config.repo || "";
-        document.getElementById("gitPath").value = config.path || "";
-        document.getElementById("gitToken").value = config.token || "";
-    }
-    gitModal.classList.add("active");
-}
-
-function closeGitModal() {
-    gitModal.classList.remove("active");
-}
-
-openGitConfigBtn.addEventListener("click", openGitModal);
-closeGitModalBtn.addEventListener("click", closeGitModal);
-cancelGitConfigBtn.addEventListener("click", closeGitModal);
-
-gitConfigForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const config = {
-        owner: document.getElementById("gitOwner").value.trim(),
-        repo: document.getElementById("gitRepo").value.trim(),
-        path: document.getElementById("gitPath").value.trim(),
-        token: document.getElementById("gitToken").value.trim()
-    };
-    await saveGitConfig(config);
-    closeGitModal();
-    alert("Configuration Git enregistrée dans IndexedDB !");
-    syncNotes(false);
-});
-
-
-/*
- * =====================================================
- * Utilitaires
- * =====================================================
- */
-
-function generateId() {
-
-    return (
-        Date.now().toString(36) +
-        "-" +
-        crypto.randomUUID()
-    );
-}
-
-
-function formatDate(timestamp) {
-
-    return new Intl.DateTimeFormat(
-        "fr-FR",
-        {
-            dateStyle: "short",
-            timeStyle: "short"
-        }
-    ).format(timestamp);
-}
-
-
-function escapeHTML(value) {
-
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-
-/*
- * =====================================================
- * Affichage de la liste
- * =====================================================
- */
-
-async function renderNotes() {
-
-    const notes = await getAllNotes();
-
-    const search = searchInput.value
-        .trim()
-        .toLowerCase();
-
-    const filtered = notes.filter(note => {
-
-        if (!search) {
-            return true;
-        }
-
-        return (
-            note.title.toLowerCase().includes(search) ||
-            note.content.toLowerCase().includes(search)
-        );
-    });
-
-    notesList.innerHTML = "";
-
-    for (const note of filtered) {
-
-        const item = document.createElement("div");
-
-        item.className =
-            "note-item" +
-            (
-                note.id === currentNoteId
-                    ? " active"
-                    : ""
-            );
-
-        const title =
-            note.title.trim() ||
-            "Sans titre";
-
-        const preview =
-            note.content
-                .replace(/\s+/g, " ")
-                .trim() ||
-            "Note vide";
-
-        item.innerHTML = `
-            <div class="note-item-title">
-                ${escapeHTML(title)}
-            </div>
-
-            <div class="note-item-preview">
-                ${escapeHTML(preview)}
-            </div>
-
-            <div class="note-item-date">
-                ${escapeHTML(formatDate(note.updatedAt))}
-            </div>
-        `;
-
-        item.addEventListener(
-            "click",
-            () => openNote(note.id)
-        );
-
-        notesList.appendChild(item);
-    }
-}
-
-
-/*
- * =====================================================
- * Ouvrir une note
- * =====================================================
- */
-
-async function openNote(id) {
-
-    const note = await getNote(id);
-
-    if (!note) {
-        return;
-    }
-
-    currentNoteId = note.id;
-
-    titleInput.value = note.title;
-    contentInput.value = note.content;
-
-    empty.style.display = "none";
-    editor.style.display = "flex";
-
-    document.body.classList.add("editing");
-
-    status.textContent = "Enregistré";
-
-    await renderNotes();
-
-    contentInput.focus();
-}
-
-
-/*
- * =====================================================
- * Créer une note
- * =====================================================
- */
-
-async function createNote() {
-
-    const now = Date.now();
-
-    const note = {
-        id: generateId(),
-        title: "",
-        content: "",
-        createdAt: now,
-        updatedAt: now
-    };
-
-    await saveNote(note);
-
-    await renderNotes();
-
-    await openNote(note.id);
-
-    triggerAutoSync();
-}
-
-
-/*
- * =====================================================
- * Gestion de l'état de modification et sauvegarde
- * =====================================================
- */
-
-function markAsNonSaved() {
-
-    if (!currentNoteId) {
-        return;
-    }
-
-    status.textContent = "Non enregistré";
-}
-
-
-async function saveCurrentNote() {
-
-    if (!currentNoteId) {
-        return;
-    }
-
-    const note = await getNote(currentNoteId);
-
-    if (!note) {
-        return;
-    }
-
-    note.title = titleInput.value;
-    note.content = contentInput.value;
-    note.updatedAt = Date.now();
-
-    await saveNote(note);
-
-    status.textContent = "Enregistré";
-
-    await renderNotes();
-
-    triggerAutoSync();
-}
-
-
-/*
- * =====================================================
- * Supprimer la note
- * =====================================================
- */
-
-async function deleteCurrentNote() {
-
-    if (!currentNoteId) {
-        return;
-    }
-
-    const note = await getNote(currentNoteId);
-
-    if (!note) {
-        return;
-    }
-
-    const label =
-        note.title.trim() ||
-        "cette note";
-
-    if (
-        !confirm(
-            `Supprimer "${label}" ?\n\nCette action est irréversible.`
-        )
-    ) {
-        return;
-    }
-
-    await deleteNoteFromDB(currentNoteId);
-
-    currentNoteId = null;
-
-    titleInput.value = "";
-    contentInput.value = "";
-
-    editor.style.display = "none";
-    empty.style.display = "flex";
-
-    document.body.classList.remove("editing");
-
-    await renderNotes();
-
-    triggerAutoSync();
-}
-
-
-/*
- * =====================================================
- * Export JSON
- * =====================================================
- */
-
-function downloadJSON(filename, data) {
-
-    const json = JSON.stringify(
-        data,
-        null,
-        2
-    );
-
-    const blob = new Blob(
-        [json],
-        {
-            type: "application/json;charset=utf-8"
-        }
-    );
-
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = filename;
-
-    document.body.appendChild(link);
-
-    link.click();
-
-    link.remove();
-
-    setTimeout(
-        () => URL.revokeObjectURL(url),
-        1000
-    );
-}
-
-
-async function exportAllNotes() {
-
-    const notes = await getAllNotes();
-
-    const exportData = {
-        format: "standalone-notes",
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        notes
-    };
-
-    const date = new Date()
-        .toISOString()
-        .slice(0, 10);
-
-    downloadJSON(
-        `notes-${date}.json`,
-        exportData
-    );
-}
-
-
-async function exportCurrentNote() {
-
-    if (!currentNoteId) {
-        return;
-    }
-
-    const note = await getNote(currentNoteId);
-
-    if (!note) {
-        return;
-    }
-
-    const exportData = {
-        format: "standalone-notes",
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        notes: [note]
-    };
-
-    const filename =
-        (
-            note.title.trim() ||
-            "note"
-        )
-        .replace(/[^\p{L}\p{N}_-]+/gu, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 80);
-
-    downloadJSON(
-        `${filename || "note"}.json`,
-        exportData
-    );
-}
-
-
-/*
- * =====================================================
- * Import JSON
- * =====================================================
- */
-
-document.getElementById("fileInput")
-    .addEventListener(
-        "change",
-        async event => {
-
-            const file = event.target.files[0];
-
-            if (!file) {
+        });
+
+        // --- 3. ENVOI DU FICHIER VIA L'API GITHUB ---
+        document.getElementById('push-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const config = await getConfig();
+            if (!config || !config.token || !config.owner || !config.repo) {
+                showStatus('Veuillez d\'abord enregistrer la configuration GitHub.', 'error');
                 return;
             }
 
+            const path = document.getElementById('path').value.trim();
+            const message = document.getElementById('message').value.trim();
+            const content = document.getElementById('content').value;
+
+            showStatus('Vérification et envoi en cours...', 'success');
+
             try {
+                // Étape A : Récupérer le SHA du fichier s'il existe déjà
+                let sha = null;
+                const getUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
+                
+                const checkResponse = await fetch(getUrl, {
+                    headers: {
+                        'Authorization': `token ${config.token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
 
-                const text =
-                    await file.text();
-
-                const data =
-                    JSON.parse(text);
-
-                if (
-                    !data ||
-                    !Array.isArray(data.notes)
-                ) {
-                    throw new Error(
-                        "Format de fichier invalide."
-                    );
+                if (checkResponse.ok) {
+                    const fileData = await checkResponse.json();
+                    sha = fileData.sha;
                 }
 
-                let imported = 0;
+                // Étape B : Encodage du contenu en UTF-8 puis Base64 (support des caractères accentués)
+                const bytes = new TextEncoder().encode(content);
+                let binary = '';
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                const contentEncoded = btoa(binary);
 
-                for (const source of data.notes) {
-
-                    if (
-                        typeof source !== "object" ||
-                        source === null
-                    ) {
-                        continue;
-                    }
-
-                    const note = {
-
-                        id:
-                            typeof source.id === "string"
-                                ? source.id
-                                : generateId(),
-
-                        title:
-                            typeof source.title === "string"
-                                ? source.title
-                                : "",
-
-                        content:
-                            typeof source.content === "string"
-                                ? source.content
-                                : "",
-
-                        createdAt:
-                            Number.isFinite(source.createdAt)
-                                ? source.createdAt
-                                : Date.now(),
-
-                        updatedAt:
-                            Number.isFinite(source.updatedAt)
-                                ? source.updatedAt
-                                : Date.now()
-                    };
-
-                    const existing =
-                        await getNote(note.id);
-
-                    if (existing) {
-                        note.id = generateId();
-                    }
-
-                    await saveNote(note);
-
-                    imported++;
+                // Étape C : Envoi de la requête de création/mise à jour (PUT)
+                const bodyData = {
+                    message: message,
+                    content: contentEncoded
+                };
+                if (sha) {
+                    bodyData.sha = sha; // Requis uniquement pour mettre à jour un fichier existant
                 }
 
-                await renderNotes();
+                const putResponse = await fetch(getUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${config.token}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/vnd.github.v3+json'
+                    },
+                    body: JSON.stringify(bodyData)
+                });
 
-                triggerAutoSync();
+                const result = await putResponse.json();
 
-                alert(
-                    `${imported} note(s) importée(s).`
-                );
+                if (putResponse.ok) {
+                    showStatus(`Fichier poussé avec succès ! Commit : ${result.commit.sha.substring(0, 7)}`, 'success');
+                } else {
+                    showStatus(`Erreur GitHub API : ${result.message}`, 'error');
+                }
 
-            } catch (error) {
-
-                console.error(error);
-
-                alert(
-                    "Impossible d'importer ce fichier.\n\n" +
-                    error.message
-                );
-
-            } finally {
-
-                event.target.value = "";
+            } catch (err) {
+                showStatus(`Erreur réseau : ${err.message}`, 'error');
             }
+        });
+
+        function showStatus(text, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = text;
+            statusDiv.className = type;
+            statusDiv.style.display = 'block';
         }
-    );
-
-
-/*
- * =====================================================
- * Événements réseau & UI
- * =====================================================
- */
-
-window.addEventListener("online", () => {
-    syncNotes(true);
-});
-
-document.getElementById("newNote")
-    .addEventListener(
-        "click",
-        createNote
-    );
-
-
-document.getElementById("syncNotes")
-    .addEventListener(
-        "click",
-        () => syncNotes(false)
-    );
-
-
-document.getElementById("emptyNewNote")
-    .addEventListener(
-        "click",
-        createNote
-    );
-
-
-document.getElementById("deleteNote")
-    .addEventListener(
-        "click",
-        deleteCurrentNote
-    );
-
-
-document.getElementById("exportAll")
-    .addEventListener(
-        "click",
-        exportAllNotes
-    );
-
-
-document.getElementById("exportCurrent")
-    .addEventListener(
-        "click",
-        exportCurrentNote
-    );
-
-
-searchInput.addEventListener(
-    "input",
-    renderNotes
-);
-
-
-titleInput.addEventListener(
-    "input",
-    markAsNonSaved
-);
-
-
-contentInput.addEventListener(
-    "input",
-    markAsNonSaved
-);
-
-
-/*
- * Raccourcis clavier :
- * Ctrl + N / Cmd + N = nouvelle note
- * Ctrl + S / Cmd + S = sauvegarder la note
- */
-
-document.addEventListener(
-    "keydown",
-    event => {
-
-        const isCmdOrCtrl = event.ctrlKey || event.metaKey;
-        const key = event.key.toLowerCase();
-
-        if (isCmdOrCtrl && key === "n") {
-
-            event.preventDefault();
-
-            createNote();
-
-        } else if (isCmdOrCtrl && key === "s") {
-
-            event.preventDefault();
-
-            saveCurrentNote();
-        }
-    }
-);
-
-
-/*
- * Bouton retour sur mobile
- */
-
-document.getElementById("backButton")
-    .addEventListener(
-        "click",
-        () => {
-
-            document.body.classList.remove(
-                "editing"
-            );
-        }
-    );
-
-
-/*
- * =====================================================
- * Démarrage
- * =====================================================
- */
-
-(async function init() {
-
-    try {
-
-        await openDatabase();
-
-        const notes = await getAllNotes();
-
-        if (notes.length > 0) {
-
-            await renderNotes();
-
-            await openNote(notes[0].id);
-
-        } else {
-
-            empty.style.display = "flex";
-            editor.style.display = "none";
-
-            await renderNotes();
-        }
-
-        if (navigator.onLine) {
-            syncNotes(true);
-        }
-
-    } catch (error) {
-
-        console.error(error);
-
-        alert(
-            "Impossible d'initialiser le stockage IndexedDB."
-        );
-    }
-
-})();
-</script>
-
+    </script>
 </body>
 </html>
