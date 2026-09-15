@@ -41,6 +41,47 @@ class Repo {
   }
 
   /**
+   * Alias polyvalent utilisé par l'interface :
+   * - Si le chemin cible un dossier, retourne la liste des fichiers.
+   * - Si le chemin cible un fichier, retourne son contenu et son SHA.
+   * @param {string} path - Chemin du fichier ou dossier.
+   * @returns {Promise<Array|Object>}
+   */
+  async fetch(path = '') {
+    const cleanPath = path.replace(/\/$/, '');
+    const url = `${this.baseUrl}/${encodeURIComponent(cleanPath)}?ref=${this.branch}`;
+    const response = await fetch(url, { headers: this._getHeaders() });
+
+    if (!response.ok) {
+      throw new Error(`Échec du fetch [${response.status}]: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // S'il s'agit d'un tableau, c'est le contenu d'un dossier
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    // Sinon c'un fichier : on décode le contenu
+    const rawContent = this._fromBase64(data.content);
+    let parsedContent;
+
+    try {
+      parsedContent = JSON.parse(rawContent);
+    } catch {
+      parsedContent = rawContent;
+    }
+
+    return {
+      content: parsedContent,
+      sha: data.sha,
+      path: data.path,
+      name: data.name
+    };
+  }
+
+  /**
    * Récupère et lit un fichier depuis le dépôt.
    * @param {string} path - Chemin du fichier.
    * @returns {Promise<Object|string>} Contenu parsé (si JSON) ou texte brut.
@@ -66,7 +107,7 @@ class Repo {
   /**
    * Crée ou met à jour un ou plusieurs fichiers.
    * @param {Object} payload - Données du push.
-   * @param {Array<{path: string, content: any}>} payload.files - Fichiers à envoyer.
+   * @param {Array<{path: string, content: any, sha?: string}>} payload.files - Fichiers à envoyer.
    * @param {string} payload.message - Message de commit.
    * @returns {Promise<Array<Object>>} Réponses de l'API GitHub.
    */
@@ -74,19 +115,22 @@ class Repo {
     const results = [];
 
     for (const file of files) {
-      const { path, content } = file;
+      const { path, content, sha: providedSha } = file;
       const url = `${this.baseUrl}/${encodeURIComponent(path)}`;
 
-      // Recherche du SHA si le fichier existe déjà
-      let sha;
-      try {
-        const getRes = await fetch(`${url}?ref=${this.branch}`, { headers: this._getHeaders() });
-        if (getRes.ok) {
-          const getData = await getRes.json();
-          sha = getData.sha;
+      let sha = providedSha;
+
+      // Si le SHA n'est pas fourni, recherche automatique si le fichier existe
+      if (!sha) {
+        try {
+          const getRes = await fetch(`${url}?ref=${this.branch}`, { headers: this._getHeaders() });
+          if (getRes.ok) {
+            const getData = await getRes.json();
+            sha = getData.sha;
+          }
+        } catch {
+          // Le fichier n'existe pas encore
         }
-      } catch {
-        // Le fichier n'existe pas encore
       }
 
       const stringContent = typeof content === 'object' ? JSON.stringify(content, null, 2) : String(content);
