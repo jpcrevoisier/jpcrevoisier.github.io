@@ -663,7 +663,7 @@ function openDatabase() {
  * =====================================================
  */
 
-function getAllNotes() {
+function getAllRawNotes() {
 
     return new Promise((resolve, reject) => {
 
@@ -677,18 +677,23 @@ function getAllNotes() {
         const request = store.getAll();
 
         request.onsuccess = () => {
-
-            const notes = request.result.sort(
-                (a, b) => b.updatedAt - a.updatedAt
-            );
-
-            resolve(notes);
+            resolve(request.result);
         };
 
         request.onerror = () => {
             reject(request.error);
         };
     });
+}
+
+
+async function getAllNotes() {
+
+    const rawNotes = await getAllRawNotes();
+
+    return rawNotes
+        .filter(note => !note.deletedAt)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 
@@ -737,7 +742,40 @@ function saveNote(note) {
 }
 
 
-function deleteNoteFromDB(id) {
+function markNoteAsDeleted(id) {
+
+    return new Promise(async (resolve, reject) => {
+
+        const note = await getNote(id);
+
+        if (!note) {
+            resolve();
+            return;
+        }
+
+        const now = Date.now();
+        note.deletedAt = now;
+        note.updatedAt = now;
+
+        const transaction = db.transaction(
+            STORE_NOTES,
+            "readwrite"
+        );
+
+        transaction.objectStore(STORE_NOTES).put(note);
+
+        transaction.oncomplete = () => {
+            resolve();
+        };
+
+        transaction.onerror = () => {
+            reject(transaction.error);
+        };
+    });
+}
+
+
+function hardDeleteNoteFromDB(id) {
 
     return new Promise((resolve, reject) => {
 
@@ -804,6 +842,7 @@ function createRepoInstance(config) {
         pat: config.token
     });
 }
+
 
 async function fetchRemoteNotes() {
 
@@ -878,7 +917,8 @@ async function syncNotes(silent = false) {
         syncBtn.disabled = true;
         if (!silent) status.textContent = "Synchronisation...";
 
-        const localNotes = await getAllNotes();
+        // 1. PULL : Récupération des notes locales et distantes
+        const localRawNotes = await getAllRawNotes();
         let remoteNotes = [];
 
         try {
@@ -888,10 +928,11 @@ async function syncNotes(silent = false) {
             console.warn("Impossible de récuperer les notes distantes :", e);
         }
 
+        // 2. CONSOLIDATION (Résolution des conflits et suppressions)
         const notesMap = new Map();
 
-        for (const note of localNotes) {
-            notesMap.set(note.id, note);
+        for (const local of localRawNotes) {
+            notesMap.set(local.id, local);
         }
 
         for (const remote of remoteNotes) {
@@ -902,23 +943,50 @@ async function syncNotes(silent = false) {
 
             const local = notesMap.get(remote.id);
 
-            if (!local || (remote.updatedAt && remote.updatedAt > local.updatedAt)) {
+            if (!local) {
                 notesMap.set(remote.id, remote);
+            } else {
+                const remoteDate = remote.updatedAt || 0;
+                const localDate = local.updatedAt || 0;
+
+                if (remoteDate > localDate) {
+                    notesMap.set(remote.id, remote);
+                }
             }
         }
 
-        const mergedNotes = Array.from(notesMap.values());
+        // Nettoyage : purge des tombstones de plus de 30 jours
+        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        const consolidatedNotes = Array.from(notesMap.values());
 
-        for (const note of mergedNotes) {
-            await saveNote(note);
+        for (const note of consolidatedNotes) {
+            if (note.deletedAt && note.deletedAt < thirtyDaysAgo) {
+                await hardDeleteNoteFromDB(note.id);
+                notesMap.delete(note.id);
+            } else {
+                await saveNote(note);
+            }
         }
 
-        await pushRemoteNotes(mergedNotes);
+        // 3. PUSH : Envoi du JSON consolidé sur GitHub
+        const finalNotesToPush = Array.from(notesMap.values());
+        await pushRemoteNotes(finalNotesToPush);
 
+        // 4. Mise à jour de l'affichage
         await renderNotes();
 
-        if (currentNoteId && notesMap.has(currentNoteId)) {
-            await openNote(currentNoteId);
+        if (currentNoteId) {
+            const current = notesMap.get(currentNoteId);
+            if (!current || current.deletedAt) {
+                currentNoteId = null;
+                titleInput.value = "";
+                contentInput.value = "";
+                editor.style.display = "none";
+                empty.style.display = "flex";
+                document.body.classList.remove("editing");
+            } else {
+                await openNote(currentNoteId);
+            }
         }
 
         status.textContent = "Enregistré";
@@ -1116,7 +1184,7 @@ async function openNote(id) {
 
     const note = await getNote(id);
 
-    if (!note) {
+    if (!note || note.deletedAt) {
         return;
     }
 
@@ -1197,6 +1265,7 @@ async function saveCurrentNote() {
     note.title = titleInput.value;
     note.content = contentInput.value;
     note.updatedAt = Date.now();
+    delete note.deletedAt;
 
     await saveNote(note);
 
@@ -1238,7 +1307,7 @@ async function deleteCurrentNote() {
         return;
     }
 
-    await deleteNoteFromDB(currentNoteId);
+    await markNoteAsDeleted(currentNoteId);
 
     currentNoteId = null;
 
@@ -1252,18 +1321,7 @@ async function deleteCurrentNote() {
 
     await renderNotes();
 
-    // Mettre à jour immédiatement le fichier sur GitHub avec la nouvelle liste des notes
-    try {
-
-        const remainingNotes = await getAllNotes();
-
-        await pushRemoteNotes(remainingNotes);
-
-    } catch (e) {
-
-        console.warn("Erreur lors du push post-suppression :", e);
-
-    }
+    syncNotes(true);
 }
 
 
