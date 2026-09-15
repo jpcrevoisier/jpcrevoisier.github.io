@@ -768,7 +768,7 @@ function saveGitConfig(config) {
 
 /*
  * =====================================================
- * Synchronisation 1 Fichier par Note (notes/id.json)
+ * Synchronisation Globale du Dossier `notes/`
  * =====================================================
  */
 
@@ -811,7 +811,7 @@ async function syncNotes(silent = false) {
 
         const repo = createRepoInstance(config);
 
-        // 1. Lister le contenu du dossier distant
+        // 1. Scanner l'intégralité du répertoire distant
         let remoteItems = [];
         try {
             const listResult = await repo.fetch(folder);
@@ -824,7 +824,7 @@ async function syncNotes(silent = false) {
             if (!e.message.includes("404")) throw e;
         }
 
-        // Garder uniquement les fichiers .json du dossier
+        // 2. Extraire tous les fichiers JSON du dossier distant
         const remoteFilesMap = new Map();
         for (const item of remoteItems) {
             if (item.type === "file" && item.name.endsWith(".json")) {
@@ -836,7 +836,7 @@ async function syncNotes(silent = false) {
             }
         }
 
-        // 2. Charger toutes les notes distantes
+        // 3. Charger le contenu de chaque note distante
         const remoteNotesMap = new Map();
         for (const [id, fileInfo] of remoteFilesMap.entries()) {
             try {
@@ -853,14 +853,14 @@ async function syncNotes(silent = false) {
             }
         }
 
-        // 3. Charger toutes les notes locales (incluant les tombstoned / supprimées)
+        // 4. Charger toutes les notes locales (actives et supprimées)
         const localRawNotes = await getAllRawNotes();
         const localNotesMap = new Map();
         for (const note of localRawNotes) {
             localNotesMap.set(note.id, note);
         }
 
-        // 4. Consolidation locale & décision des fichiers à pousser / supprimer
+        // 5. Comparaison bidirectionnelle (fusion par horodatage)
         const allIds = new Set([...localNotesMap.keys(), ...remoteNotesMap.keys()]);
         const filesToPush = [];
         const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
@@ -884,15 +884,14 @@ async function syncNotes(silent = false) {
 
             if (!winner) continue;
 
-            // Purge des tombstones locales de + de 30 jours
+            // Purge des tombstones locales anciennes
             if (winner.deletedAt && winner.deletedAt < thirtyDaysAgo) {
                 await hardDeleteNoteFromDB(id);
-                // Si le fichier existe encore à distance, on le nettoie également
                 if (remoteEntry) {
                     try {
                         await repo.delete(`${folder}/${id}.json`, `Suppression définitive de la note ${id}`);
                     } catch (e) {
-                        console.warn(`Impossible de supprimer le fichier distant obsolète ${id}:`, e);
+                        console.warn(`Erreur de nettoyage distant pour ${id}:`, e);
                     }
                 }
                 continue;
@@ -900,7 +899,7 @@ async function syncNotes(silent = false) {
 
             await saveNote(winner);
 
-            // Si la note gagnante est marquée comme supprimée
+            // Traitement des suppressions à répercuter à distance
             if (winner.deletedAt) {
                 if (remoteEntry) {
                     try {
@@ -912,7 +911,7 @@ async function syncNotes(silent = false) {
                 continue;
             }
 
-            // Préparation du Push si la note locale est plus récente ou le distant absent
+            // Détection du besoin d'envoi vers le dépôt distant
             const needPush = !remote || (local && local.updatedAt > (remote.updatedAt || 0));
 
             if (needPush) {
@@ -924,15 +923,15 @@ async function syncNotes(silent = false) {
             }
         }
 
-        // 5. Envoi des fichiers créés/modifiés sur Git
+        // 6. Envoi groupé des mises à jour vers GitHub
         if (filesToPush.length > 0) {
             await repo.push({
                 files: filesToPush,
-                message: `sync notes (${filesToPush.length} fichier(s)): ${new Date().toLocaleString('fr-FR')}`
+                message: `Mise à jour du dossier notes (${filesToPush.length} fichier(s)) : ${new Date().toLocaleString('fr-FR')}`
             });
         }
 
-        // 6. Mise à jour UI
+        // 7. Rafraîchissement de l'interface
         await renderNotes();
 
         if (currentNoteId) {
@@ -952,7 +951,7 @@ async function syncNotes(silent = false) {
         status.textContent = "Enregistré";
 
         if (!silent) {
-            alert("Synchronisation réussie !");
+            alert("Dossier des notes synchronisé avec succès !");
         }
 
     } catch (error) {
@@ -1504,6 +1503,11 @@ document.getElementById("backButton").addEventListener("click", () => {
 
         await openDatabase();
 
+        // Lancement immédiat de la synchronisation au chargement de la page
+        if (navigator.onLine) {
+            await syncNotes(true);
+        }
+
         const notes = await getAllNotes();
 
         if (notes.length > 0) {
@@ -1515,14 +1519,10 @@ document.getElementById("backButton").addEventListener("click", () => {
             await renderNotes();
         }
 
-        if (navigator.onLine) {
-            syncNotes(true);
-        }
-
     } catch (error) {
 
         console.error(error);
-        alert("Impossible d'initialiser le stockage IndexedDB.");
+        alert("Impossible d'initialiser l'application.");
     }
 
 })();
