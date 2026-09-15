@@ -354,6 +354,7 @@ let currentNoteId = null;
 let saveDebounceTimer = null;
 let isSyncing = false;
 let periodicSyncTimer = null;
+let isDirty = false;
 
 const notesList = document.getElementById("notesList");
 const searchInput = document.getElementById("search");
@@ -538,6 +539,11 @@ async function syncNotes(silent = false) {
         const allIds = new Set([...localNotesMap.keys(), ...remoteNotesMap.keys()]);
 
         for (const id of allIds) {
+            // Si la note est en cours d'édition locale et modifiée, on ne la remplace pas depuis le distant
+            if (id === currentNoteId && isDirty) {
+                continue;
+            }
+
             const local = localNotesMap.get(id);
             const remoteEntry = remoteNotesMap.get(id);
             const remote = remoteEntry ? remoteEntry.note : null;
@@ -554,7 +560,7 @@ async function syncNotes(silent = false) {
 
         await renderNotes();
 
-        if (currentNoteId) {
+        if (currentNoteId && !isDirty) {
             const current = await getNote(currentNoteId);
             if (!current || current.deletedAt) {
                 closeEditor();
@@ -564,7 +570,9 @@ async function syncNotes(silent = false) {
             }
         }
 
-        status.textContent = "Enregistré";
+        if (!isDirty) {
+            status.textContent = "Enregistré";
+        }
     } catch (error) {
         console.error("Erreur de synchronisation :", error);
         if (!silent) alert("Échec de la synchronisation : " + error.message);
@@ -576,7 +584,7 @@ async function syncNotes(silent = false) {
 }
 
 async function verifyAndSyncSingleNote(id) {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || isDirty) return;
 
     const config = await getGitConfig();
     if (!config) return;
@@ -591,7 +599,7 @@ async function verifyAndSyncSingleNote(id) {
         try {
             remoteRes = await repo.fetch(remotePath);
         } catch (e) {
-            return; // La note n'existe pas encore à distance
+            return;
         }
 
         if (remoteRes && remoteRes.content) {
@@ -600,7 +608,7 @@ async function verifyAndSyncSingleNote(id) {
 
             if (!localNote || (remoteNote.updatedAt || 0) > (localNote.updatedAt || 0)) {
                 await saveNoteToIDB(remoteNote);
-                if (currentNoteId === id) {
+                if (currentNoteId === id && !isDirty) {
                     titleInput.value = remoteNote.title || "";
                     contentInput.value = remoteNote.content || "";
                 }
@@ -629,6 +637,7 @@ async function pushNoteToGit(note, commitMessage) {
         message: commitMessage
     });
 
+    isDirty = false;
     status.textContent = "Enregistré";
 }
 
@@ -647,6 +656,7 @@ async function deleteNoteFromGit(id, commitMessage) {
         console.warn("Fichier non trouvé sur le repo distant lors de la suppression.", e);
     }
 
+    isDirty = false;
     status.textContent = "Enregistré";
 }
 
@@ -702,10 +712,15 @@ async function renderNotes() {
 }
 
 async function openNote(id) {
+    if (isDirty) {
+        await saveCurrentNote();
+    }
+
     const note = await getNote(id);
     if (!note || note.deletedAt) return;
 
     currentNoteId = note.id;
+    isDirty = false;
     titleInput.value = note.title || "";
     contentInput.value = note.content || "";
 
@@ -715,12 +730,12 @@ async function openNote(id) {
 
     await renderNotes();
 
-    // Vérification de mise à jour lors de la sélection
     await verifyAndSyncSingleNote(id);
 }
 
 function closeEditor() {
     currentNoteId = null;
+    isDirty = false;
     titleInput.value = "";
     contentInput.value = "";
     editor.style.display = "none";
@@ -729,6 +744,10 @@ function closeEditor() {
 }
 
 async function createNote() {
+    if (isDirty) {
+        await saveCurrentNote();
+    }
+
     const now = Date.now();
     const note = {
         id: generateId(),
@@ -770,6 +789,7 @@ async function saveCurrentNote() {
 }
 
 function scheduleAutoSave() {
+    isDirty = true;
     status.textContent = "Non enregistré";
     clearTimeout(saveDebounceTimer);
     saveDebounceTimer = setTimeout(() => {
@@ -950,7 +970,6 @@ document.getElementById("backButton").addEventListener("click", () => {
             await renderNotes();
         }
 
-        // Vérification régulière de la synchronisation (toutes les 30 secondes)
         periodicSyncTimer = setInterval(() => {
             syncNotes(true);
         }, SYNC_INTERVAL_MS);
