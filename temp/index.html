@@ -853,14 +853,14 @@ async function syncNotes(silent = false) {
             }
         }
 
-        // 3. Charger toutes les notes locales
+        // 3. Charger toutes les notes locales (incluant les tombstoned / supprimées)
         const localRawNotes = await getAllRawNotes();
         const localNotesMap = new Map();
         for (const note of localRawNotes) {
             localNotesMap.set(note.id, note);
         }
 
-        // 4. Consolidation locale & décision des fichiers à pousser
+        // 4. Consolidation locale & décision des fichiers à pousser / supprimer
         const allIds = new Set([...localNotesMap.keys(), ...remoteNotesMap.keys()]);
         const filesToPush = [];
         const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
@@ -884,15 +884,35 @@ async function syncNotes(silent = false) {
 
             if (!winner) continue;
 
-            // Purge des tombstones de + de 30 jours
+            // Purge des tombstones locales de + de 30 jours
             if (winner.deletedAt && winner.deletedAt < thirtyDaysAgo) {
                 await hardDeleteNoteFromDB(id);
+                // Si le fichier existe encore à distance, on le nettoie également
+                if (remoteEntry) {
+                    try {
+                        await repo.delete(`${folder}/${id}.json`, `Suppression définitive de la note ${id}`);
+                    } catch (e) {
+                        console.warn(`Impossible de supprimer le fichier distant obsolète ${id}:`, e);
+                    }
+                }
                 continue;
             }
 
             await saveNote(winner);
 
-            // Préparation du Push si le local gagne ou si le fichier distant est absent/obsolète
+            // Si la note gagnante est marquée comme supprimée
+            if (winner.deletedAt) {
+                if (remoteEntry) {
+                    try {
+                        await repo.delete(`${folder}/${id}.json`, `Suppression de la note ${id}`);
+                    } catch (e) {
+                        console.warn(`Erreur lors de la suppression sur Git pour ${id}:`, e);
+                    }
+                }
+                continue;
+            }
+
+            // Préparation du Push si la note locale est plus récente ou le distant absent
             const needPush = !remote || (local && local.updatedAt > (remote.updatedAt || 0));
 
             if (needPush) {
@@ -904,7 +924,7 @@ async function syncNotes(silent = false) {
             }
         }
 
-        // 5. Envoi des fichiers indépendants sur Git si des changements locaux existent
+        // 5. Envoi des fichiers créés/modifiés sur Git
         if (filesToPush.length > 0) {
             await repo.push({
                 files: filesToPush,
