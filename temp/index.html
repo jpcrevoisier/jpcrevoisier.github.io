@@ -844,35 +844,36 @@ function createRepoInstance(config) {
 }
 
 
-async function fetchRemoteNotes() {
-
-    const config = await getGitConfig();
-    const repo = createRepoInstance(config);
+async function fetchRemoteNotes(repo, path) {
 
     try {
-        const data = await repo.pull(config.path);
+        const result = await repo.get(path);
 
         let notes = [];
-        if (Array.isArray(data)) {
-            notes = data;
-        } else if (data && Array.isArray(data.notes)) {
-            notes = data.notes;
+        let sha = null;
+
+        if (result) {
+            sha = result.sha || null;
+            const data = result.content;
+
+            if (Array.isArray(data)) {
+                notes = data;
+            } else if (data && Array.isArray(data.notes)) {
+                notes = data.notes;
+            }
         }
 
-        return { notes };
+        return { notes, sha };
     } catch (error) {
         if (error.message.includes("404")) {
-            return { notes: [] };
+            return { notes: [], sha: null };
         }
         throw error;
     }
 }
 
 
-async function pushRemoteNotes(notes) {
-
-    const config = await getGitConfig();
-    const repo = createRepoInstance(config);
+async function pushRemoteNotes(repo, path, notes, remoteSha = null) {
 
     const payloadObj = {
         format: "standalone-notes",
@@ -881,13 +882,17 @@ async function pushRemoteNotes(notes) {
         notes: notes
     };
 
+    const filePayload = {
+        path: path,
+        content: payloadObj
+    };
+
+    if (remoteSha) {
+        filePayload.sha = remoteSha;
+    }
+
     await repo.push({
-        files: [
-            {
-                path: config.path,
-                content: payloadObj
-            }
-        ],
+        files: [filePayload],
         message: `sync notes: ${new Date().toLocaleString('fr-FR')}`
     });
 }
@@ -917,15 +922,19 @@ async function syncNotes(silent = false) {
         syncBtn.disabled = true;
         if (!silent) status.textContent = "Synchronisation...";
 
-        // 1. PULL : Récupération des notes locales et distantes
+        const repo = createRepoInstance(config);
+
+        // 1. PULL : Récupération des notes locales et distantes (+ SHA)
         const localRawNotes = await getAllRawNotes();
         let remoteNotes = [];
+        let remoteSha = null;
 
         try {
-            const remoteResult = await fetchRemoteNotes();
+            const remoteResult = await fetchRemoteNotes(repo, config.path);
             remoteNotes = remoteResult.notes;
+            remoteSha = remoteResult.sha;
         } catch (e) {
-            console.warn("Impossible de récuperer les notes distantes :", e);
+            console.warn("Impossible de récupérer les notes distantes :", e);
         }
 
         // 2. CONSOLIDATION (Résolution des conflits et suppressions)
@@ -968,9 +977,9 @@ async function syncNotes(silent = false) {
             }
         }
 
-        // 3. PUSH : Envoi du JSON consolidé sur GitHub
+        // 3. PUSH : Envoi du JSON consolidé en fournissant explicitement le SHA du PULL
         const finalNotesToPush = Array.from(notesMap.values());
-        await pushRemoteNotes(finalNotesToPush);
+        await pushRemoteNotes(repo, config.path, finalNotesToPush, remoteSha);
 
         // 4. Mise à jour de l'affichage
         await renderNotes();
