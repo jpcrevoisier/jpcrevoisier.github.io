@@ -8,9 +8,7 @@
 <script src="../repo.js"></script>
 
 <style>
-* {
-    box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 :root {
     --bg: #f5f6f8;
@@ -23,8 +21,7 @@
     --danger: #b42318;
 }
 
-html,
-body {
+html, body {
     margin: 0;
     width: 100%;
     height: 100%;
@@ -37,10 +34,6 @@ body {
     display: flex;
     overflow: hidden;
 }
-
-/* --------------------------------------------------
-   Barre latérale
--------------------------------------------------- */
 
 .sidebar {
     width: 320px;
@@ -75,9 +68,7 @@ body {
     outline: none;
 }
 
-.search:focus {
-    border-color: var(--accent);
-}
+.search:focus { border-color: var(--accent); }
 
 .sidebar-actions {
     display: grid;
@@ -86,8 +77,7 @@ body {
     margin-top: 10px;
 }
 
-button,
-.file-button {
+button, .file-button {
     border: 0;
     border-radius: 7px;
     padding: 9px 12px;
@@ -97,25 +87,11 @@ button,
     color: var(--text);
 }
 
-button:hover,
-.file-button:hover {
-    filter: brightness(.96);
-}
+button:hover, .file-button:hover { filter: brightness(.96); }
 
-.primary {
-    background: var(--accent);
-    color: white;
-}
-
-.danger {
-    color: var(--danger);
-}
-
-.icon-btn {
-    background: transparent;
-    padding: 4px 8px;
-    font-size: 16px;
-}
+.primary { background: var(--accent); color: white; }
+.danger { color: var(--danger); }
+.icon-btn { background: transparent; padding: 4px 8px; font-size: 16px; }
 
 .notes-list {
     flex: 1;
@@ -128,10 +104,7 @@ button:hover,
     cursor: pointer;
 }
 
-.note-item:hover {
-    background: #f7f8fa;
-}
-
+.note-item:hover { background: #f7f8fa; }
 .note-item.active {
     background: var(--accent-light);
     border-left: 4px solid var(--accent);
@@ -160,10 +133,6 @@ button:hover,
     color: var(--muted);
     font-size: 11px;
 }
-
-/* --------------------------------------------------
-   Éditeur
--------------------------------------------------- */
 
 .editor {
     flex: 1;
@@ -218,10 +187,6 @@ button:hover,
     line-height: 1.65;
 }
 
-/* --------------------------------------------------
-   État vide
--------------------------------------------------- */
-
 .empty {
     flex: 1;
     display: flex;
@@ -231,17 +196,8 @@ button:hover,
     color: var(--muted);
 }
 
-.empty-inner {
-    max-width: 400px;
-}
-
-.empty-inner h2 {
-    color: var(--text);
-}
-
-/* --------------------------------------------------
-   Fenêtre Modale Git
--------------------------------------------------- */
+.empty-inner { max-width: 400px; }
+.empty-inner h2 { color: var(--text); }
 
 .modal-backdrop {
     position: fixed;
@@ -280,22 +236,9 @@ button:hover,
     margin-bottom: 15px;
 }
 
-.modal-title {
-    font-size: 18px;
-    font-weight: 700;
-}
-
-.form-group {
-    margin-bottom: 12px;
-}
-
-.form-group label {
-    display: block;
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
+.modal-title { font-size: 18px; font-weight: 700; }
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
 .form-group input {
     width: 100%;
     border: 1px solid var(--border);
@@ -305,232 +248,66 @@ button:hover,
     outline: none;
 }
 
-.form-group input:focus {
-    border-color: var(--accent);
-}
+.form-group input:focus { border-color: var(--accent); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 18px;
-}
-
-/* --------------------------------------------------
-   Menu mobile
--------------------------------------------------- */
-
-.mobile-menu {
-    display: none;
-}
+.mobile-menu { display: none; }
 
 @media (max-width: 700px) {
-
-    .sidebar {
-        width: 100%;
-        min-width: 0;
-    }
-
-    .editor {
-        display: none;
-    }
-
-    body.editing .sidebar {
-        display: none;
-    }
-
-    body.editing .editor {
-        display: flex;
-    }
-
-    .mobile-menu {
-        display: block;
-    }
-
-    .editor-header {
-        padding-left: 10px;
-    }
-
-    .editor-content {
-        padding: 15px;
-    }
-
-    .status {
-        display: none;
-    }
+    .sidebar { width: 100%; min-width: 0; }
+    .editor { display: none; }
+    body.editing .sidebar { display: none; }
+    body.editing .editor { display: flex; }
+    .mobile-menu { display: block; }
+    .editor-header { padding-left: 10px; }
+    .editor-content { padding: 15px; }
+    .status { display: none; }
 }
 
-/* --------------------------------------------------
-   Import caché
--------------------------------------------------- */
-
-#fileInput {
-    display: none;
-}
+#fileInput { display: none; }
 </style>
-
 </head>
 
 <body>
 
-<!-- ==================================================
-     LISTE DES NOTES
-================================================== -->
-
 <aside class="sidebar">
-
-<div class="sidebar-header">
-
-    <div class="app-title">
-        <span>Mes notes</span>
-        <button id="openGitConfig" class="icon-btn" type="button" title="Configuration Git">⚙️</button>
+    <div class="sidebar-header">
+        <div class="app-title">
+            <span>Mes notes</span>
+            <button id="openGitConfig" class="icon-btn" type="button" title="Configuration Git">⚙️</button>
+        </div>
+        <input id="search" class="search" type="search" placeholder="Rechercher..." autocomplete="off">
+        <div class="sidebar-actions">
+            <button id="newNote" class="primary" type="button">+ Nouvelle note</button>
+            <button id="syncNotes" type="button">Synchroniser</button>
+            <button id="exportAll" type="button">Exporter</button>
+            <label for="fileInput" class="file-button" style="text-align:center">Importer</label>
+            <button id="deleteNote" class="danger" type="button" style="grid-column: span 2;">Supprimer</button>
+        </div>
+        <input id="fileInput" type="file" accept=".json,application/json">
     </div>
-
-    <input
-        id="search"
-        class="search"
-        type="search"
-        placeholder="Rechercher..."
-        autocomplete="off"
-    >
-
-    <div class="sidebar-actions">
-
-        <button
-            id="newNote"
-            class="primary"
-            type="button"
-        >
-            + Nouvelle note
-        </button>
-
-        <button
-            id="syncNotes"
-            type="button"
-        >
-            Synchroniser
-        </button>
-
-        <button
-            id="exportAll"
-            type="button"
-        >
-            Exporter
-        </button>
-
-        <label
-            for="fileInput"
-            class="file-button"
-            style="text-align:center"
-        >
-            Importer
-        </label>
-
-        <button
-            id="deleteNote"
-            class="danger"
-            type="button"
-            style="grid-column: span 2;"
-        >
-            Supprimer
-        </button>
-
-    </div>
-
-    <input
-        id="fileInput"
-        type="file"
-        accept=".json,application/json"
-    >
-
-</div>
-
-<div id="notesList" class="notes-list"></div>
-
+    <div id="notesList" class="notes-list"></div>
 </aside>
 
-<!-- ==================================================
-     ÉDITEUR
-================================================== -->
-
 <main class="editor">
-
-<header class="editor-header">
-
-    <button
-        id="backButton"
-        class="mobile-menu"
-        type="button"
-    >
-        ←
-    </button>
-
-    <input
-        id="title"
-        class="title-input"
-        type="text"
-        placeholder="Titre de la note"
-        autocomplete="off"
-    >
-
-    <span
-        id="status"
-        class="status"
-    >
-        Enregistré
-    </span>
-
-    <button
-        id="exportCurrent"
-        type="button"
-    >
-        Exporter
-    </button>
-
-</header>
-
-<section class="editor-content">
-
-    <textarea
-        id="content"
-        class="content-input"
-        placeholder="Commencez à écrire..."
-        spellcheck="true"
-    ></textarea>
-
-</section>
-
+    <header class="editor-header">
+        <button id="backButton" class="mobile-menu" type="button">←</button>
+        <input id="title" class="title-input" type="text" placeholder="Titre de la note" autocomplete="off">
+        <span id="status" class="status">Enregistré</span>
+        <button id="exportCurrent" type="button">Exporter</button>
+    </header>
+    <section class="editor-content">
+        <textarea id="content" class="content-input" placeholder="Commencez à écrire..." spellcheck="true"></textarea>
+    </section>
 </main>
 
-<!-- ==================================================
-     ÉTAT INITIAL
-================================================== -->
-
 <div id="empty" class="empty">
-
-<div class="empty-inner">
-
-    <h2>Aucune note sélectionnée</h2>
-
-    <p>
-        Créez une nouvelle note pour commencer.
-    </p>
-
-    <button
-        id="emptyNewNote"
-        class="primary"
-        type="button"
-    >
-        + Nouvelle note
-    </button>
-
+    <div class="empty-inner">
+        <h2>Aucune note sélectionnée</h2>
+        <p>Créez une nouvelle note pour commencer.</p>
+        <button id="emptyNewNote" class="primary" type="button">+ Nouvelle note</button>
+    </div>
 </div>
-
-</div>
-
-<!-- ==================================================
-     MODALE DE CONFIGURATION GIT
-================================================== -->
 
 <div id="gitModal" class="modal-backdrop">
     <div class="modal">
@@ -566,28 +343,17 @@ button:hover,
 <script>
 "use strict";
 
-/*
- * =====================================================
- * Configuration IndexedDB & GitHub REST API
- * =====================================================
- */
-
 const DB_NAME = "StandaloneNotesDB";
 const DB_VERSION = 3;
 const STORE_NOTES = "notes";
 const STORE_CONFIG = "config";
+const SYNC_INTERVAL_MS = 30000;
 
 let db = null;
 let currentNoteId = null;
-let syncTimer = null;
+let saveDebounceTimer = null;
 let isSyncing = false;
-
-
-/*
- * =====================================================
- * Éléments DOM
- * =====================================================
- */
+let periodicSyncTimer = null;
 
 const notesList = document.getElementById("notesList");
 const searchInput = document.getElementById("search");
@@ -603,35 +369,21 @@ const closeGitModalBtn = document.getElementById("closeGitModal");
 const cancelGitConfigBtn = document.getElementById("cancelGitConfig");
 const gitConfigForm = document.getElementById("gitConfigForm");
 
-
-/*
- * =====================================================
- * Initialisation IndexedDB
- * =====================================================
- */
+/* --------------------------------------------------
+   IndexedDB
+-------------------------------------------------- */
 
 function openDatabase() {
-
     return new Promise((resolve, reject) => {
-
         const request = indexedDB.open(DB_NAME, DB_VERSION);
-
         request.onerror = () => reject(request.error);
 
         request.onupgradeneeded = event => {
-
             const database = event.target.result;
-
             if (!database.objectStoreNames.contains(STORE_NOTES)) {
-
-                const store = database.createObjectStore(
-                    STORE_NOTES,
-                    { keyPath: "id" }
-                );
-
+                const store = database.createObjectStore(STORE_NOTES, { keyPath: "id" });
                 store.createIndex("updatedAt", "updatedAt", { unique: false });
             }
-
             if (!database.objectStoreNames.contains(STORE_CONFIG)) {
                 database.createObjectStore(STORE_CONFIG);
             }
@@ -644,139 +396,78 @@ function openDatabase() {
     });
 }
 
-
-/*
- * =====================================================
- * Accès IndexedDB
- * =====================================================
- */
-
 function getAllRawNotes() {
-
     return new Promise((resolve, reject) => {
-
         const transaction = db.transaction(STORE_NOTES, "readonly");
         const store = transaction.objectStore(STORE_NOTES);
         const request = store.getAll();
-
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
 
-
 async function getAllNotes() {
-
     const rawNotes = await getAllRawNotes();
-
     return rawNotes
         .filter(note => !note.deletedAt)
         .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-
 function getNote(id) {
-
     return new Promise((resolve, reject) => {
-
         const transaction = db.transaction(STORE_NOTES, "readonly");
         const request = transaction.objectStore(STORE_NOTES).get(id);
-
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
 
-
-function saveNote(note) {
-
+function saveNoteToIDB(note) {
     return new Promise((resolve, reject) => {
-
         const transaction = db.transaction(STORE_NOTES, "readwrite");
         transaction.objectStore(STORE_NOTES).put(note);
-
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);
     });
 }
-
-
-function markNoteAsDeleted(id) {
-
-    return new Promise(async (resolve, reject) => {
-
-        const note = await getNote(id);
-
-        if (!note) {
-            resolve();
-            return;
-        }
-
-        const now = Date.now();
-        note.deletedAt = now;
-        note.updatedAt = now;
-
-        const transaction = db.transaction(STORE_NOTES, "readwrite");
-        transaction.objectStore(STORE_NOTES).put(note);
-
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-    });
-}
-
 
 function hardDeleteNoteFromDB(id) {
-
     return new Promise((resolve, reject) => {
-
         const transaction = db.transaction(STORE_NOTES, "readwrite");
         transaction.objectStore(STORE_NOTES).delete(id);
-
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);
     });
 }
 
-
 function getGitConfig() {
-
     return new Promise((resolve, reject) => {
-
         const transaction = db.transaction(STORE_CONFIG, "readonly");
         const store = transaction.objectStore(STORE_CONFIG);
         const request = store.get("github");
-
         request.onsuccess = () => resolve(request.result || null);
         request.onerror = () => reject(request.error);
     });
 }
 
-
 function saveGitConfig(config) {
-
     return new Promise((resolve, reject) => {
-
         const transaction = db.transaction(STORE_CONFIG, "readwrite");
         const store = transaction.objectStore(STORE_CONFIG);
         store.put(config, "github");
-
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);
     });
 }
 
-
-/*
- * =====================================================
- * Synchronisation Globale du Dossier `notes/`
- * =====================================================
- */
+/* --------------------------------------------------
+   Synchronisation & Git Operations
+-------------------------------------------------- */
 
 function createRepoInstance(config) {
     if (!config || !config.owner || !config.repo || !config.token) {
-        throw new Error("Configuration GitHub incomplète. Cliquez sur ⚙️ pour configurer.");
+        throw new Error("Configuration GitHub manquante.");
     }
-
     return new Repo({
         owner: config.owner,
         repo: config.repo,
@@ -784,12 +475,8 @@ function createRepoInstance(config) {
     });
 }
 
-
 async function syncNotes(silent = false) {
-
-    if (!navigator.onLine || isSyncing) {
-        return;
-    }
+    if (!navigator.onLine || isSyncing) return;
 
     const config = await getGitConfig();
     if (!config) {
@@ -798,20 +485,17 @@ async function syncNotes(silent = false) {
     }
 
     const folder = (config.folder || "notes").replace(/\/+$|^\/+/g, "");
-
     isSyncing = true;
     const syncBtn = document.getElementById("syncNotes");
     const originalText = syncBtn.textContent;
 
     try {
-
         syncBtn.textContent = "Sync...";
         syncBtn.disabled = true;
         if (!silent) status.textContent = "Synchronisation...";
 
         const repo = createRepoInstance(config);
 
-        // 1. Scanner l'intégralité du répertoire distant
         let remoteItems = [];
         try {
             const listResult = await repo.fetch(folder);
@@ -824,167 +508,299 @@ async function syncNotes(silent = false) {
             if (!e.message.includes("404")) throw e;
         }
 
-        // 2. Extraire tous les fichiers JSON du dossier distant
         const remoteFilesMap = new Map();
         for (const item of remoteItems) {
             if (item.type === "file" && item.name.endsWith(".json")) {
                 const noteId = item.name.replace(/\.json$/, "");
-                remoteFilesMap.set(noteId, {
-                    path: item.path,
-                    sha: item.sha
-                });
+                remoteFilesMap.set(noteId, { path: item.path, sha: item.sha });
             }
         }
 
-        // 3. Charger le contenu de chaque note distante
         const remoteNotesMap = new Map();
         for (const [id, fileInfo] of remoteFilesMap.entries()) {
             try {
                 const res = await repo.fetch(fileInfo.path);
                 if (res && res.content) {
                     const noteData = typeof res.content === "string" ? JSON.parse(res.content) : res.content;
-                    remoteNotesMap.set(id, {
-                        note: noteData,
-                        sha: res.sha || fileInfo.sha
-                    });
+                    remoteNotesMap.set(id, { note: noteData, sha: res.sha || fileInfo.sha });
                 }
             } catch (e) {
-                console.warn(`Erreur lecture distant ${fileInfo.path}:`, e);
+                console.warn(`Erreur lecture distante ${fileInfo.path}:`, e);
             }
         }
 
-        // 4. Charger toutes les notes locales (actives et supprimées)
         const localRawNotes = await getAllRawNotes();
         const localNotesMap = new Map();
         for (const note of localRawNotes) {
             localNotesMap.set(note.id, note);
         }
 
-        // 5. Comparaison bidirectionnelle (fusion par horodatage)
         const allIds = new Set([...localNotesMap.keys(), ...remoteNotesMap.keys()]);
-        const filesToPush = [];
-        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
 
         for (const id of allIds) {
-
             const local = localNotesMap.get(id);
             const remoteEntry = remoteNotesMap.get(id);
             const remote = remoteEntry ? remoteEntry.note : null;
-            const remoteSha = remoteEntry ? remoteEntry.sha : null;
-
-            let winner = null;
 
             if (local && remote) {
-                winner = (remote.updatedAt || 0) > (local.updatedAt || 0) ? remote : local;
-            } else if (local) {
-                winner = local;
+                const winner = (remote.updatedAt || 0) > (local.updatedAt || 0) ? remote : local;
+                await saveNoteToIDB(winner);
             } else if (remote) {
-                winner = remote;
-            }
-
-            if (!winner) continue;
-
-            // Purge des tombstones locales anciennes
-            if (winner.deletedAt && winner.deletedAt < thirtyDaysAgo) {
+                await saveNoteToIDB(remote);
+            } else if (local && local.deletedAt) {
                 await hardDeleteNoteFromDB(id);
-                if (remoteEntry) {
-                    try {
-                        await repo.delete(`${folder}/${id}.json`, `Suppression définitive de la note ${id}`);
-                    } catch (e) {
-                        console.warn(`Erreur de nettoyage distant pour ${id}:`, e);
-                    }
-                }
-                continue;
-            }
-
-            await saveNote(winner);
-
-            // Traitement des suppressions à répercuter à distance
-            if (winner.deletedAt) {
-                if (remoteEntry) {
-                    try {
-                        await repo.delete(`${folder}/${id}.json`, `Suppression de la note ${id}`);
-                    } catch (e) {
-                        console.warn(`Erreur lors de la suppression sur Git pour ${id}:`, e);
-                    }
-                }
-                continue;
-            }
-
-            // Détection du besoin d'envoi vers le dépôt distant
-            const needPush = !remote || (local && local.updatedAt > (remote.updatedAt || 0));
-
-            if (needPush) {
-                filesToPush.push({
-                    path: `${folder}/${id}.json`,
-                    content: winner,
-                    ...(remoteSha ? { sha: remoteSha } : {})
-                });
             }
         }
 
-        // 6. Envoi groupé des mises à jour vers GitHub
-        if (filesToPush.length > 0) {
-            await repo.push({
-                files: filesToPush,
-                message: `Mise à jour du dossier notes (${filesToPush.length} fichier(s)) : ${new Date().toLocaleString('fr-FR')}`
-            });
-        }
-
-        // 7. Rafraîchissement de l'interface
         await renderNotes();
 
         if (currentNoteId) {
             const current = await getNote(currentNoteId);
             if (!current || current.deletedAt) {
-                currentNoteId = null;
-                titleInput.value = "";
-                contentInput.value = "";
-                editor.style.display = "none";
-                empty.style.display = "flex";
-                document.body.classList.remove("editing");
+                closeEditor();
             } else {
-                await openNote(currentNoteId);
+                titleInput.value = current.title || "";
+                contentInput.value = current.content || "";
             }
         }
 
         status.textContent = "Enregistré";
-
-        if (!silent) {
-            alert("Dossier des notes synchronisé avec succès !");
-        }
-
     } catch (error) {
-
-        console.error(error);
-        if (!silent) {
-            alert("Échec de la synchronisation : " + error.message);
-        }
-
+        console.error("Erreur de synchronisation :", error);
+        if (!silent) alert("Échec de la synchronisation : " + error.message);
     } finally {
-
         syncBtn.textContent = originalText;
         syncBtn.disabled = false;
         isSyncing = false;
     }
 }
 
+async function verifyAndSyncSingleNote(id) {
+    if (!navigator.onLine) return;
 
-function triggerAutoSync() {
+    const config = await getGitConfig();
+    if (!config) return;
 
-    clearTimeout(syncTimer);
+    const folder = (config.folder || "notes").replace(/\/+$|^\/+/g, "");
 
-    syncTimer = setTimeout(() => {
-        syncNotes(true);
-    }, 1000);
+    try {
+        const repo = createRepoInstance(config);
+        const remotePath = `${folder}/${id}.json`;
+        
+        let remoteRes;
+        try {
+            remoteRes = await repo.fetch(remotePath);
+        } catch (e) {
+            return; // La note n'existe pas encore à distance
+        }
+
+        if (remoteRes && remoteRes.content) {
+            const remoteNote = typeof remoteRes.content === "string" ? JSON.parse(remoteRes.content) : remoteRes.content;
+            const localNote = await getNote(id);
+
+            if (!localNote || (remoteNote.updatedAt || 0) > (localNote.updatedAt || 0)) {
+                await saveNoteToIDB(remoteNote);
+                if (currentNoteId === id) {
+                    titleInput.value = remoteNote.title || "";
+                    contentInput.value = remoteNote.content || "";
+                }
+                await renderNotes();
+            }
+        }
+    } catch (e) {
+        console.warn(`Erreur vérification note ${id}:`, e);
+    }
 }
 
+async function pushNoteToGit(note, commitMessage) {
+    const config = await getGitConfig();
+    if (!config) return;
 
-/*
- * =====================================================
- * Gestion Modale de configuration Git
- * =====================================================
- */
+    const folder = (config.folder || "notes").replace(/\/+$|^\/+/g, "");
+    const repo = createRepoInstance(config);
+
+    status.textContent = "Push vers Git...";
+
+    await repo.push({
+        files: [{
+            path: `${folder}/${note.id}.json`,
+            content: note
+        }],
+        message: commitMessage
+    });
+
+    status.textContent = "Enregistré";
+}
+
+async function deleteNoteFromGit(id, commitMessage) {
+    const config = await getGitConfig();
+    if (!config) return;
+
+    const folder = (config.folder || "notes").replace(/\/+$|^\/+/g, "");
+    const repo = createRepoInstance(config);
+
+    status.textContent = "Suppression Git...";
+
+    try {
+        await repo.delete(`${folder}/${id}.json`, commitMessage);
+    } catch (e) {
+        console.warn("Fichier non trouvé sur le repo distant lors de la suppression.", e);
+    }
+
+    status.textContent = "Enregistré";
+}
+
+/* --------------------------------------------------
+   UI & Actions
+-------------------------------------------------- */
+
+function generateId() {
+    return Date.now().toString(36) + "-" + crypto.randomUUID();
+}
+
+function formatDate(timestamp) {
+    return new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" }).format(timestamp);
+}
+
+function escapeHTML(value) {
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+async function renderNotes() {
+    const notes = await getAllNotes();
+    const search = searchInput.value.trim().toLowerCase();
+
+    const filtered = notes.filter(note => {
+        if (!search) return true;
+        return (note.title && note.title.toLowerCase().includes(search)) ||
+               (note.content && note.content.toLowerCase().includes(search));
+    });
+
+    notesList.innerHTML = "";
+
+    for (const note of filtered) {
+        const item = document.createElement("div");
+        item.className = "note-item" + (note.id === currentNoteId ? " active" : "");
+
+        const title = (note.title && note.title.trim()) || "Sans titre";
+        const preview = (note.content && note.content.replace(/\s+/g, " ").trim()) || "Note vide";
+
+        item.innerHTML = `
+            <div class="note-item-title">${escapeHTML(title)}</div>
+            <div class="note-item-preview">${escapeHTML(preview)}</div>
+            <div class="note-item-date">${escapeHTML(formatDate(note.updatedAt))}</div>
+        `;
+
+        item.addEventListener("click", () => openNote(note.id));
+        notesList.appendChild(item);
+    }
+}
+
+async function openNote(id) {
+    const note = await getNote(id);
+    if (!note || note.deletedAt) return;
+
+    currentNoteId = note.id;
+    titleInput.value = note.title || "";
+    contentInput.value = note.content || "";
+
+    empty.style.display = "none";
+    editor.style.display = "flex";
+    document.body.classList.add("editing");
+
+    await renderNotes();
+
+    // Vérification de mise à jour lors de la sélection
+    await verifyAndSyncSingleNote(id);
+}
+
+function closeEditor() {
+    currentNoteId = null;
+    titleInput.value = "";
+    contentInput.value = "";
+    editor.style.display = "none";
+    empty.style.display = "flex";
+    document.body.classList.remove("editing");
+}
+
+async function createNote() {
+    const now = Date.now();
+    const note = {
+        id: generateId(),
+        title: "",
+        content: "",
+        createdAt: now,
+        updatedAt: now
+    };
+
+    await saveNoteToIDB(note);
+    await renderNotes();
+    await openNote(note.id);
+
+    try {
+        await pushNoteToGit(note, `Création de la note ${note.id}`);
+    } catch (e) {
+        console.error("Erreur push création :", e);
+    }
+}
+
+async function saveCurrentNote() {
+    if (!currentNoteId) return;
+
+    const note = await getNote(currentNoteId);
+    if (!note) return;
+
+    note.title = titleInput.value;
+    note.content = contentInput.value;
+    note.updatedAt = Date.now();
+
+    await saveNoteToIDB(note);
+    await renderNotes();
+
+    try {
+        await pushNoteToGit(note, `Mise à jour note: ${note.title || note.id}`);
+    } catch (e) {
+        console.error("Erreur push modification :", e);
+    }
+}
+
+function scheduleAutoSave() {
+    status.textContent = "Non enregistré";
+    clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(() => {
+        saveCurrentNote();
+    }, 1500);
+}
+
+async function deleteCurrentNote() {
+    if (!currentNoteId) return;
+
+    const note = await getNote(currentNoteId);
+    if (!note) return;
+
+    const label = (note.title && note.title.trim()) || "cette note";
+    if (!confirm(`Supprimer "${label}" ?`)) return;
+
+    const deletedId = currentNoteId;
+    await hardDeleteNoteFromDB(deletedId);
+    closeEditor();
+    await renderNotes();
+
+    try {
+        await deleteNoteFromGit(deletedId, `Suppression de la note ${deletedId}`);
+    } catch (e) {
+        console.error("Erreur suppression Git :", e);
+    }
+}
+
+/* --------------------------------------------------
+   Modale Git & Configuration
+-------------------------------------------------- */
 
 async function openGitModal() {
     const config = await getGitConfig();
@@ -1015,453 +831,86 @@ gitConfigForm.addEventListener("submit", async (e) => {
     };
     await saveGitConfig(config);
     closeGitModal();
-    alert("Configuration Git enregistrée dans IndexedDB !");
     syncNotes(false);
 });
 
-
-/*
- * =====================================================
- * Utilitaires
- * =====================================================
- */
-
-function generateId() {
-    return (
-        Date.now().toString(36) +
-        "-" +
-        crypto.randomUUID()
-    );
-}
-
-
-function formatDate(timestamp) {
-
-    return new Intl.DateTimeFormat(
-        "fr-FR",
-        {
-            dateStyle: "short",
-            timeStyle: "short"
-        }
-    ).format(timestamp);
-}
-
-
-function escapeHTML(value) {
-
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-
-/*
- * =====================================================
- * Affichage de la liste
- * =====================================================
- */
-
-async function renderNotes() {
-
-    const notes = await getAllNotes();
-
-    const search = searchInput.value
-        .trim()
-        .toLowerCase();
-
-    const filtered = notes.filter(note => {
-
-        if (!search) {
-            return true;
-        }
-
-        return (
-            (note.title && note.title.toLowerCase().includes(search)) ||
-            (note.content && note.content.toLowerCase().includes(search))
-        );
-    });
-
-    notesList.innerHTML = "";
-
-    for (const note of filtered) {
-
-        const item = document.createElement("div");
-
-        item.className =
-            "note-item" +
-            (
-                note.id === currentNoteId
-                    ? " active"
-                    : ""
-            );
-
-        const title =
-            (note.title && note.title.trim()) ||
-            "Sans titre";
-
-        const preview =
-            (note.content && note.content.replace(/\s+/g, " ").trim()) ||
-            "Note vide";
-
-        item.innerHTML = `
-            <div class="note-item-title">
-                ${escapeHTML(title)}
-            </div>
-
-            <div class="note-item-preview">
-                ${escapeHTML(preview)}
-            </div>
-
-            <div class="note-item-date">
-                ${escapeHTML(formatDate(note.updatedAt))}
-            </div>
-        `;
-
-        item.addEventListener(
-            "click",
-            () => openNote(note.id)
-        );
-
-        notesList.appendChild(item);
-    }
-}
-
-
-/*
- * =====================================================
- * Ouvrir une note
- * =====================================================
- */
-
-async function openNote(id) {
-
-    const note = await getNote(id);
-
-    if (!note || note.deletedAt) {
-        return;
-    }
-
-    currentNoteId = note.id;
-
-    titleInput.value = note.title || "";
-    contentInput.value = note.content || "";
-
-    empty.style.display = "none";
-    editor.style.display = "flex";
-
-    document.body.classList.add("editing");
-
-    status.textContent = "Enregistré";
-
-    await renderNotes();
-
-    contentInput.focus();
-}
-
-
-/*
- * =====================================================
- * Créer une note
- * =====================================================
- */
-
-async function createNote() {
-
-    const now = Date.now();
-
-    const note = {
-        id: generateId(),
-        title: "",
-        content: "",
-        createdAt: now,
-        updatedAt: now
-    };
-
-    await saveNote(note);
-
-    await renderNotes();
-
-    await openNote(note.id);
-
-    triggerAutoSync();
-}
-
-
-/*
- * =====================================================
- * Gestion de l'état de modification et sauvegarde
- * =====================================================
- */
-
-function markAsNonSaved() {
-
-    if (!currentNoteId) {
-        return;
-    }
-
-    status.textContent = "Non enregistré";
-}
-
-
-async function saveCurrentNote() {
-
-    if (!currentNoteId) {
-        return;
-    }
-
-    const note = await getNote(currentNoteId);
-
-    if (!note) {
-        return;
-    }
-
-    note.title = titleInput.value;
-    note.content = contentInput.value;
-    note.updatedAt = Date.now();
-    delete note.deletedAt;
-
-    await saveNote(note);
-
-    status.textContent = "Enregistré";
-
-    await renderNotes();
-
-    triggerAutoSync();
-}
-
-
-/*
- * =====================================================
- * Supprimer la note
- * =====================================================
- */
-
-async function deleteCurrentNote() {
-
-    if (!currentNoteId) {
-        return;
-    }
-
-    const note = await getNote(currentNoteId);
-
-    if (!note) {
-        return;
-    }
-
-    const label =
-        (note.title && note.title.trim()) ||
-        "cette note";
-
-    if (
-        !confirm(
-            `Supprimer "${label}" ?\n\nCette action est irréversible.`
-        )
-    ) {
-        return;
-    }
-
-    await markNoteAsDeleted(currentNoteId);
-
-    currentNoteId = null;
-
-    titleInput.value = "";
-    contentInput.value = "";
-
-    editor.style.display = "none";
-    empty.style.display = "flex";
-
-    document.body.classList.remove("editing");
-
-    await renderNotes();
-
-    syncNotes(true);
-}
-
-
-/*
- * =====================================================
- * Export JSON
- * =====================================================
- */
+/* --------------------------------------------------
+   Import & Export
+-------------------------------------------------- */
 
 function downloadJSON(filename, data) {
-
-    const json = JSON.stringify(
-        data,
-        null,
-        2
-    );
-
-    const blob = new Blob(
-        [json],
-        {
-            type: "application/json;charset=utf-8"
-        }
-    );
-
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-
     const link = document.createElement("a");
-
     link.href = url;
     link.download = filename;
-
     document.body.appendChild(link);
-
     link.click();
-
     link.remove();
-
-    setTimeout(
-        () => URL.revokeObjectURL(url),
-        1000
-    );
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
 
 async function exportAllNotes() {
-
     const notes = await getAllNotes();
-
-    const exportData = {
+    downloadJSON(`notes-${new Date().toISOString().slice(0, 10)}.json`, {
         format: "standalone-notes",
-        version: 1,
         exportedAt: new Date().toISOString(),
         notes
-    };
-
-    const date = new Date()
-        .toISOString()
-        .slice(0, 10);
-
-    downloadJSON(
-        `notes-${date}.json`,
-        exportData
-    );
+    });
 }
-
 
 async function exportCurrentNote() {
-
-    if (!currentNoteId) {
-        return;
-    }
-
+    if (!currentNoteId) return;
     const note = await getNote(currentNoteId);
+    if (!note) return;
 
-    if (!note) {
-        return;
-    }
-
-    const exportData = {
-        format: "standalone-notes",
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        notes: [note]
-    };
-
-    const filename =
-        (
-            (note.title && note.title.trim()) ||
-            "note"
-        )
+    const filename = ((note.title && note.title.trim()) || "note")
         .replace(/[^\p{L}\p{N}_-]+/gu, "-")
-        .replace(/^-+|-+$/g, "")
         .slice(0, 80);
 
-    downloadJSON(
-        `${filename || "note"}.json`,
-        exportData
-    );
+    downloadJSON(`${filename}.json`, {
+        format: "standalone-notes",
+        exportedAt: new Date().toISOString(),
+        notes: [note]
+    });
 }
 
+document.getElementById("fileInput").addEventListener("change", async event => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-/*
- * =====================================================
- * Import JSON
- * =====================================================
- */
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const listToImport = Array.isArray(data) ? data : (data && Array.isArray(data.notes) ? data.notes : [data]);
 
-document.getElementById("fileInput")
-    .addEventListener(
-        "change",
-        async event => {
-
-            const file = event.target.files[0];
-
-            if (!file) {
-                return;
-            }
-
-            try {
-
-                const text = await file.text();
-                const data = JSON.parse(text);
-
-                const listToImport = Array.isArray(data)
-                    ? data
-                    : (data && Array.isArray(data.notes) ? data.notes : [data]);
-
-                let imported = 0;
-
-                for (const source of listToImport) {
-
-                    if (typeof source !== "object" || source === null) {
-                        continue;
-                    }
-
-                    const note = {
-                        id: typeof source.id === "string" ? source.id : generateId(),
-                        title: typeof source.title === "string" ? source.title : "",
-                        content: typeof source.content === "string" ? source.content : "",
-                        createdAt: Number.isFinite(source.createdAt) ? source.createdAt : Date.now(),
-                        updatedAt: Number.isFinite(source.updatedAt) ? source.updatedAt : Date.now()
-                    };
-
-                    const existing = await getNote(note.id);
-
-                    if (existing) {
-                        note.id = generateId();
-                    }
-
-                    await saveNote(note);
-
-                    imported++;
-                }
-
-                await renderNotes();
-
-                triggerAutoSync();
-
-                alert(`${imported} note(s) importée(s).`);
-
-            } catch (error) {
-
-                console.error(error);
-
-                alert("Impossible d'importer ce fichier.\n\n" + error.message);
-
-            } finally {
-
-                event.target.value = "";
-            }
+        for (const source of listToImport) {
+            if (typeof source !== "object" || !source) continue;
+            const note = {
+                id: generateId(),
+                title: typeof source.title === "string" ? source.title : "",
+                content: typeof source.content === "string" ? source.content : "",
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            };
+            await saveNoteToIDB(note);
+            await pushNoteToGit(note, `Import note: ${note.title || note.id}`);
         }
-    );
 
-
-/*
- * =====================================================
- * Événements réseau & UI
- * =====================================================
- */
-
-window.addEventListener("online", () => {
-    syncNotes(true);
+        await renderNotes();
+        alert("Import terminé avec succès.");
+    } catch (error) {
+        alert("Erreur lors de l'import : " + error.message);
+    } finally {
+        event.target.value = "";
+    }
 });
 
+/* --------------------------------------------------
+   Événements & Initialisation
+-------------------------------------------------- */
+
+window.addEventListener("online", () => syncNotes(true));
 document.getElementById("newNote").addEventListener("click", createNote);
 document.getElementById("syncNotes").addEventListener("click", () => syncNotes(false));
 document.getElementById("emptyNewNote").addEventListener("click", createNote);
@@ -1470,61 +919,45 @@ document.getElementById("exportAll").addEventListener("click", exportAllNotes);
 document.getElementById("exportCurrent").addEventListener("click", exportCurrentNote);
 
 searchInput.addEventListener("input", renderNotes);
-titleInput.addEventListener("input", markAsNonSaved);
-contentInput.addEventListener("input", markAsNonSaved);
+titleInput.addEventListener("input", scheduleAutoSave);
+contentInput.addEventListener("input", scheduleAutoSave);
 
 document.addEventListener("keydown", event => {
     const isCmdOrCtrl = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
-
-    if (isCmdOrCtrl && key === "n") {
-        event.preventDefault();
-        createNote();
-    } else if (isCmdOrCtrl && key === "s") {
-        event.preventDefault();
-        saveCurrentNote();
-    }
+    if (isCmdOrCtrl && key === "n") { event.preventDefault(); createNote(); }
+    if (isCmdOrCtrl && key === "s") { event.preventDefault(); saveCurrentNote(); }
 });
 
 document.getElementById("backButton").addEventListener("click", () => {
     document.body.classList.remove("editing");
 });
 
-
-/*
- * =====================================================
- * Démarrage
- * =====================================================
- */
-
 (async function init() {
-
     try {
-
         await openDatabase();
 
-        // Lancement immédiat de la synchronisation au chargement de la page
         if (navigator.onLine) {
             await syncNotes(true);
         }
 
         const notes = await getAllNotes();
-
         if (notes.length > 0) {
             await renderNotes();
             await openNote(notes[0].id);
         } else {
-            empty.style.display = "flex";
-            editor.style.display = "none";
+            closeEditor();
             await renderNotes();
         }
 
+        // Vérification régulière de la synchronisation (toutes les 30 secondes)
+        periodicSyncTimer = setInterval(() => {
+            syncNotes(true);
+        }, SYNC_INTERVAL_MS);
+
     } catch (error) {
-
-        console.error(error);
-        alert("Impossible d'initialiser l'application.");
+        console.error("Initialisation échouée :", error);
     }
-
 })();
 </script>
 

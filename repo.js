@@ -24,7 +24,7 @@ class Repo {
     };
   }
 
-  // Encodage Base64 compatible UTF-8 (navigateur et Node.js)
+  // Encodage Base64 compatible UTF-8
   _toBase64(str) {
     if (typeof btoa === 'function') {
       return btoa(unescape(encodeURIComponent(str)));
@@ -58,12 +58,10 @@ class Repo {
 
     const data = await response.json();
 
-    // S'il s'agit d'un tableau, c'est le contenu d'un dossier
     if (Array.isArray(data)) {
       return data;
     }
 
-    // Sinon c'un fichier : on décode le contenu
     const rawContent = this._fromBase64(data.content);
     let parsedContent;
 
@@ -120,7 +118,6 @@ class Repo {
 
       let sha = providedSha;
 
-      // Si le SHA n'est pas fourni, recherche automatique si le fichier existe
       if (!sha) {
         try {
           const getRes = await fetch(`${url}?ref=${this.branch}`, { headers: this._getHeaders() });
@@ -185,7 +182,6 @@ class Repo {
   async delete(path, message = 'Suppression de fichier') {
     const url = `${this.baseUrl}/${encodeURIComponent(path)}`;
 
-    // Récupération obligatoire du SHA avant suppression
     const getRes = await fetch(`${url}?ref=${this.branch}`, { headers: this._getHeaders() });
     if (!getRes.ok) {
       throw new Error(`Impossible de trouver le fichier à supprimer : ${path}`);
