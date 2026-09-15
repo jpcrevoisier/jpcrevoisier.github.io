@@ -814,7 +814,7 @@ async function syncNotes(silent = false) {
         // 1. Lister le contenu du dossier distant
         let remoteItems = [];
         try {
-            const listResult = await repo.get(folder);
+            const listResult = await repo.fetch(folder);
             if (Array.isArray(listResult)) {
                 remoteItems = listResult;
             } else if (listResult && listResult.content && Array.isArray(listResult.content)) {
@@ -840,7 +840,7 @@ async function syncNotes(silent = false) {
         const remoteNotesMap = new Map();
         for (const [id, fileInfo] of remoteFilesMap.entries()) {
             try {
-                const res = await repo.get(fileInfo.path);
+                const res = await repo.fetch(fileInfo.path);
                 if (res && res.content) {
                     const noteData = typeof res.content === "string" ? JSON.parse(res.content) : res.content;
                     remoteNotesMap.set(id, {
