@@ -1252,7 +1252,18 @@ async function deleteCurrentNote() {
 
     await renderNotes();
 
-    triggerAutoSync();
+    // Mettre à jour immédiatement le fichier sur GitHub avec la nouvelle liste des notes
+    try {
+
+        const remainingNotes = await getAllNotes();
+
+        await pushRemoteNotes(remainingNotes);
+
+    } catch (e) {
+
+        console.warn("Erreur lors du push post-suppression :", e);
+
+    }
 }
 
 
