@@ -8,3 +8,8 @@ Quelques fichiers html autonomes pour des petits usages / besoins ...
  - [💾 GIT ](https://jpcrevoisier.github.io/git/index.html)
  - [🎁 Emojis ](https://jpcrevoisier.github.io/Emojis/index.html)
  - [📝 PDFedit ](https://jpcrevoisier.github.io/pdfedit/index.html)
+
+Le push depuis windows ... 
+```
+$heure = Get-Date -Format "HHmmss"; git add *; git commit -m "$heure"; git push
+```
