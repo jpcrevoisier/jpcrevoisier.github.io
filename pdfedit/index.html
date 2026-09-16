@@ -1,0 +1,1332 @@
+
+<!-- fichier : editeur-pdf-v18.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=ai-legible&utm_source=comment&utm_medium=referral&utm_id=ce87b6c7-2f4c-4263-a963-58f21dd8ae9e
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
+<meta name="hosting-provider" content="Netlify">
+<meta name="netlify-deploy" content="https://netlify.new/?utm_campaign=ai-legible&amp;utm_source=meta&amp;utm_medium=referral&amp;utm_id=ce87b6c7-2f4c-4263-a963-58f21dd8ae9e">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Éditeur PDF Stable V18 - Ctrl force le déplacement (au lieu du redimensionnement)</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        :root {
+            --sidebar-width: 300px;
+            --bg-color: #525659;
+            --primary: #2563eb;
+            --danger: #dc2626;
+        }
+
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; height: 100vh; display: flex; overflow: hidden; }
+
+        aside {
+            width: var(--sidebar-width);
+            background: #fff;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            overflow-y: auto;
+            z-index: 20;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        h2, h3 { margin-top: 0; font-size: 1.1rem; color: #333; }
+        .control-group { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        button:hover { opacity: 0.9; }
+        button.secondary { background: #64748b; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* ZONE DE TEXTE RICHE / CODE */
+        #input-text-editable {
+            width: 100%;
+            min-height: 80px;
+            margin-bottom: 8px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            overflow-y: auto;
+            cursor: text;
+            font-family: 'Segoe UI', monospace;
+            white-space: pre-wrap;
+        }
+        #input-text-editable:empty:before {
+            content: "Saisir du texte HTML, ou coller du code JS (dessin sur canvas)...";
+            color: #aaa;
+        }
+        #input-text-editable:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px var(--primary);
+        }
+
+        .lib-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 8px;
+            padding: 8px;
+            cursor: grab;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: stretch;
+            border-radius: 4px;
+            user-select: none;
+        }
+        .lib-item:active { cursor: grabbing; }
+
+        .lib-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .lib-title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+            flex-grow: 1;
+        }
+        .lib-preview-container {
+            display: flex;
+            align-items: center;
+            border-top: 1px solid #eee;
+            padding-top: 5px;
+            cursor: pointer; /* indique que l'aperçu est cliquable (édition du contenu) */
+        }
+        .lib-preview { max-width: 40px; max-height: 40px; object-fit: contain; margin-right: 10px; border: 1px solid #ddd; background: #fff; }
+        .lib-text-preview { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .delete-btn { width: auto; background: transparent; color: var(--danger); padding: 0 6px; font-size: 1.2rem; margin:0; }
+
+        /* Badge pour identifier les éléments de type "code" dans la bibliothèque */
+        .lib-code-badge {
+            display: inline-block;
+            background: #0f172a;
+            color: #38bdf8;
+            font-family: monospace;
+            font-size: 0.7rem;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+
+        main {
+            flex: 1;
+            background: var(--bg-color);
+            position: relative;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 0;
+        }
+        #pages-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding-bottom: 50px;
+        }
+        .page-wrapper {
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            background: white;
+        }
+        canvas { display: block; }
+        .elements-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            z-index: 10;
+        }
+        .added-element {
+            position: absolute;
+            border: 1px dashed transparent;
+            cursor: move;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+        .added-element:hover, .added-element.selected { border: 1px dashed var(--primary); background: rgba(37, 99, 235, 0.1); }
+        .added-element img { width: 100%; height: 100%; pointer-events: none; display: block; object-fit: contain; }
+        .added-element .content-text {
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            word-wrap: break-word;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Mode "déplacement forcé" (touche Ctrl maintenue) :
+           on force le curseur de déplacement sur toute la surface de l'élément,
+           y compris près des bords où apparaîtrait normalement le curseur de redimensionnement. */
+        body.force-move-mode .added-element { cursor: move !important; }
+        body.force-move-mode .added-element:hover,
+        body.force-move-mode .added-element.selected { border-color: #16a34a; background: rgba(22, 163, 74, 0.12); }
+
+        .elem-delete {
+            position: absolute;
+            top: -12px; right: -12px;
+            background: var(--danger);
+            color: white;
+            border-radius: 50%;
+            width: 24px; height: 24px;
+            font-size: 14px;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 20;
+        }
+        .added-element:hover .elem-delete { display: flex; }
+
+        #drop-overlay {
+            position: fixed;
+            top: 0; left: var(--sidebar-width); right: 0; bottom: 0;
+            background: rgba(37, 99, 235, 0.2);
+            border: 4px dashed var(--primary);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            color: white;
+            pointer-events: none;
+            z-index: 100;
+        }
+        main.drag-active #drop-overlay { display: flex; }
+
+        #empty-state {
+            color: #ccc;
+            margin-top: 20vh;
+            text-align: center;
+        }
+        #file-input { display: none; }
+        #image-input { display: none; }
+
+        /* Bloc d'aide (format du code JS) */
+        .code-help { margin-top: 8px; font-size: 0.8rem; color: #555; }
+        .code-help summary { cursor: pointer; }
+        .code-help pre {
+            white-space: pre-wrap;
+            background: #f1f5f9;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+        .code-help code { background: #e2e8f0; padding: 0 3px; border-radius: 3px; }
+
+        /* ==========================================================
+           MODALE D'ÉDITION DU CONTENU D'UN ÉLÉMENT DE BIBLIOTHÈQUE
+           ========================================================== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            background: #fff;
+            width: min(640px, 92vw);
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: 8px;
+            padding: 1.2rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+        }
+        .modal-box h3 { margin-bottom: 1rem; }
+        .modal-editable {
+            min-height: 150px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .modal-editable:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px var(--primary);
+        }
+        .modal-textarea {
+            width: 100%;
+            min-height: 240px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+            white-space: pre;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 1rem;
+        }
+        .modal-actions button { margin-bottom: 0; }
+    </style>
+</head>
+<body>
+
+    <aside>
+        <div class="control-group">
+            <h2>Gestion Document</h2>
+            <button onclick="document.getElementById('file-input').click()">📂 Ouvrir un PDF</button>
+            <input type="file" id="file-input" accept="application/pdf">
+            <button class="secondary" onclick="savePDF()">💾 Sauvegarder PDF</button>
+            <button class="secondary" style="background:#eab308; margin-top:10px;" onclick="resetWorkspace()">🗑️ Reset</button>
+        </div>
+
+        <div class="control-group">
+            <h3>Ajouter Texte / Code</h3>
+            <div id="input-text-editable" contenteditable="true"></div>
+            <button onclick="addTextToLib()">Ajouter Texte HTML à la bibliothèque</button>
+            <button class="secondary" onclick="addCodeToLib()">&lt;/&gt; Ajouter Code JS à la bibliothèque</button>
+
+            <details class="code-help">
+                <summary>Aide : format du code JS</summary>
+                <div style="margin-top:6px;">
+                    Votre code reçoit <code>canvas</code> (300×150 par défaut, redimensionnable
+                    via <code>canvas.width</code> / <code>canvas.height</code>) et
+                    <code>ctx</code> (contexte 2D). Dessinez sur <code>ctx</code>.
+                    Le code est ré-exécuté <b>à chaque dépôt</b> (idéal pour date/heure/aléatoire).
+                    <code>await</code> est supporté. Vous pouvez aussi retourner un
+                    <code>canvas</code> ou une chaîne <code>dataURL</code> pour surcharger le rendu.
+                    <br><br>Exemple :
+                    <pre>canvas.width = 220;
+canvas.height = 90;
+ctx.fillStyle = '#2563eb';
+ctx.fillRect(0, 0, 220, 90);
+ctx.fillStyle = '#fff';
+ctx.font = '16px sans-serif';
+ctx.fillText('Le ' + new Date().toLocaleDateString(), 12, 50);</pre>
+                </div>
+            </details>
+        </div>
+
+        <div class="control-group">
+            <h3>Ajouter Image (PNG/JPG/WebP)</h3>
+            <button onclick="document.getElementById('image-input').click()">🖼️ Ajouter une Image</button>
+            <input type="file" id="image-input" accept="image/png, image/jpeg, image/webp">
+        </div>
+
+        <div class="control-group" style="flex:1; display:flex; flex-direction:column; border:none; padding-bottom:0;">
+            <h3>Bibliothèque</h3>
+            <div style="font-size:0.8rem; color:#666; margin-bottom:10px;">
+                Double-cliquez sur le <b>titre</b> pour renommer, ou sur l'<b>aperçu</b> pour
+                modifier le contenu (les éléments déjà posés sur le PDF seront mis à jour).
+                <br>Sur le PDF : maintenez <b>Ctrl</b> pour forcer le déplacement (sans redimensionner).
+            </div>
+            <div id="lib-container" style="flex:1; overflow-y:auto;"></div>
+        </div>
+    </aside>
+
+    <main id="main-area">
+        <div id="drop-overlay">Déposer ici</div>
+        <div id="empty-state">
+            <h1>Aucun PDF chargé</h1>
+            <p>Ouvrez un fichier ou glissez-le ici.</p>
+        </div>
+        <div id="pages-container"></div>
+    </main>
+
+    <!-- Modale d'édition du contenu d'un élément de bibliothèque -->
+    <div id="content-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="content-modal-title">Modifier le contenu</h3>
+            <div id="content-modal-body"></div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="closeContentModal()">Annuler</button>
+                <button onclick="saveContentModal()">Enregistrer &amp; appliquer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+// ============================================================
+//  EXTENSIONS PROTOTYPES UTILISATEUR (conservées telles quelles)
+//  Accessibles depuis le code exécuté en sandbox (globales).
+// ============================================================
+String.prototype.lpad = function(padString, length) {
+	var str = this;
+	while (str.length < length)
+		str = padString + str;
+	return str;
+}
+String.prototype.rpad = function(padString, length) {
+	var str = this;
+	while (str.length < length)
+		str = str + padString;
+	return str;
+}
+String.prototype.trim=function()
+{
+	var rtrim = /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g;
+	return this.replace(rtrim, '');
+}
+String.prototype.toUtf8=function()
+{
+	return unescape(encodeURIComponent(this))
+}
+String.prototype.fromUtf8=function()
+{
+	return decodeURIComponent(escape(this));
+}
+Date.prototype.asArray=function(time)
+{
+	if(time!=undefined)
+	{
+		return new Array(
+			this.getFullYear().toString().trim().lpad('0',4),
+			(this.getMonth()+1).toString().trim().lpad('0',2),
+			this.getDate().toString().trim().lpad('0',2),
+			this.getHours().toString().trim().lpad('0',2),
+			this.getMinutes().toString().trim().lpad('0',2),
+			this.getSeconds().toString().trim().lpad('0',2)
+		);
+	}
+	return new Array(
+		this.getFullYear().toString().trim().lpad('0',4),
+		(this.getMonth()+1).toString().trim().lpad('0',2),
+		this.getDate().toString().trim().lpad('0',2)
+	);
+	
+}
+Date.prototype.us=function(time)
+{
+	array=this.asArray();
+	feedback=array[0]+'-'+array[1]+'-'+array[2];
+	if(time)
+	{
+		feedback+=' '+array[3]+':'+array[4]+':'+array[5];
+	}
+	return feedback;
+}
+Date.prototype.delta=function(depuis)
+{
+	xx=parseInt(this.getTime/1000);
+	switch(typeof depuis)
+	{
+		case 'object' :
+			tt=parseInt(depuis.getTime()/1000)
+		break;
+		case 'number' :
+			tt=depuis;
+		break;
+		default:
+			return false;
+	}
+	return (tt>xx)?tt-xx:xx-tt;
+}
+Date.prototype.mois=function()
+{
+	x=['janvier','fevrier','mars','avril','mai','juin','juillet','aout','septembre','octobre','novembre','decembre'];
+	return x[this.getMonth()];
+}
+Date.prototype.jour=function()
+{
+	x=['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimache'];
+	return x[this.getDay()];
+}
+Date.prototype.YM=function()
+{
+	array=this.asArray();
+	return array[0]+''+array[1];
+}
+Date.prototype.YW=function()
+{
+	array=this.asArray();
+	W=this.getWeek().toString().lpad('0',2);
+	return array[0]+''+W;
+}
+Date.prototype.fr=function(time,nosec)
+{
+	array=this.asArray(true);
+	feedback=array[2]+'/'+array[1]+'/'+array[0];
+	if(time)
+	{
+		if(nosec)
+		{
+			feedback+=' '+array[3]+':'+array[4];
+		}
+		else
+		{
+			feedback+=' '+array[3]+':'+array[4]+':'+array[5];
+		}
+	}
+	return feedback;
+}
+Date.prototype.compact=function(time)
+{
+	return this.asArray(time).join('');
+}
+Date.prototype.getWeek = function() {
+	var onejan = new Date(this.getFullYear(), 0, 1);
+	var today = new Date(this.getFullYear(), this.getMonth(), this.getDate());
+	var dayOfYear = ((today - onejan + 86400000) / 86400000);
+	return Math.ceil(dayOfYear / 7);
+}
+Date.prototype.lea = function() {
+	var array=this.asArray(true);
+	return 'le '+this.jour()+' '+array[2].toString()+' '+this.mois()+' à '+array[3].toString()+'h'+array[4].toString();
+}
+CanvasRenderingContext2D.prototype.applyStampWear = function(intensity = 0.50, iterations = 20000) {
+    const ctx = this; 
+    const width = ctx.canvas.width;
+    const height = ctx.canvas.height;
+    
+    ctx.save(); 
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = '#FFFFFF'; 
+    
+    for (let i = 0; i < iterations; i++) {
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        const size = Math.random() * 2 + 0.5;
+        ctx.globalAlpha = Math.random() * intensity; 
+        ctx.fillRect(x, y, size, size);
+    }
+    
+    ctx.restore(); 
+};
+
+        // --- CONFIGURATION ---
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        const dbName = "PdfEditorDB_V13"; // Conservé pour garder la bibliothèque existante
+        const storeName = "library";
+        let db;
+
+        let originalPdfBuffer = null;
+        let pdfDocProxy = null;
+        let pdfScale = 1.5;
+
+        // Élément de bibliothèque en cours d'édition dans la modale (id + type + contenu de travail)
+        let editingItem = null;
+
+        // État "déplacement forcé" : passe à true tant que la touche Ctrl est maintenue.
+        // Quand il est actif, le redimensionnement des éléments posés est désactivé
+        // et seul le déplacement (drag) reste possible, y compris près des bords.
+        let ctrlForceMove = false;
+
+        // Petit utilitaire d'échappement HTML (pour afficher du code sans casser le DOM)
+        function escapeHtml(s) {
+            return (s || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        // Chargement asynchrone d'une image à partir d'une source (dataURL)
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
+
+        // --- INDEXED DB ---
+        async function initDB() {
+            return new Promise((resolve) => {
+                const request = indexedDB.open(dbName, 1);
+                request.onupgradeneeded = (e) => {
+                    db = e.target.result;
+                    if (!db.objectStoreNames.contains(storeName)) {
+                        db.createObjectStore(storeName, { keyPath: "id", autoIncrement: true });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    db = e.target.result;
+                    loadLibrary();
+                    resolve(db);
+                };
+            });
+        }
+
+        function saveToLib(type, content, title = 'Nouvel Élément') {
+            const tx = db.transaction([storeName], "readwrite");
+            const item = { type, content, title, date: new Date() };
+            tx.objectStore(storeName).add(item);
+            tx.oncomplete = loadLibrary;
+        }
+
+        function updateLibTitle(id, newTitle) {
+            const tx = db.transaction([storeName], "readwrite");
+            const store = tx.objectStore(storeName);
+            const request = store.get(id);
+
+            request.onsuccess = () => {
+                const item = request.result;
+                if (item) {
+                    item.title = newTitle;
+                    store.put(item);
+                    tx.oncomplete = loadLibrary;
+                }
+            };
+        }
+
+        // Mise à jour du CONTENU d'un élément de bibliothèque.
+        // Le titre est volontairement préservé (on ne l'écrase pas si l'utilisateur l'a renommé).
+        // Après persistance : on recharge la bibliothèque ET on propage le nouveau
+        // contenu à toutes les instances déjà déposées sur le PDF (via data-lib-id).
+        function updateLibContent(id, newContent) {
+            const tx = db.transaction([storeName], "readwrite");
+            const store = tx.objectStore(storeName);
+            const request = store.get(id);
+
+            request.onsuccess = () => {
+                const item = request.result;
+                if (item) {
+                    item.content = newContent;
+                    store.put(item);
+                    tx.oncomplete = () => {
+                        loadLibrary();
+                        // item contient le type d'origine + le nouveau contenu
+                        propagateContentToPlaced(item);
+                    };
+                }
+            };
+        }
+
+        // Propage le nouveau contenu d'un élément de bibliothèque vers tous les
+        // éléments déjà placés sur le PDF qui en sont issus (même data-lib-id).
+        // Position et taille définies par l'utilisateur sont conservées : seul le contenu change.
+        async function propagateContentToPlaced(item) {
+            const placed = document.querySelectorAll(`.added-element[data-lib-id="${item.id}"]`);
+            if (!placed.length) return;
+
+            if (item.type === 'code') {
+                // On ré-exécute le code UNE SEULE fois, puis on applique le rendu partout.
+                const res = await runCodeToImage(item.content, false);
+                if (!res || !res.dataUrl) return;
+                placed.forEach(el => {
+                    const img = el.querySelector('img');
+                    if (img) img.src = res.dataUrl;
+                });
+            } else if (item.type === 'image') {
+                placed.forEach(el => {
+                    const img = el.querySelector('img');
+                    if (img) img.src = item.content;
+                });
+            } else if (item.type === 'text') {
+                placed.forEach(el => {
+                    const c = el.querySelector('.content-text');
+                    if (c) c.innerHTML = item.content;
+                });
+            }
+        }
+
+        function deleteFromLib(id) {
+            const tx = db.transaction([storeName], "readwrite");
+            tx.objectStore(storeName).delete(id);
+            tx.oncomplete = loadLibrary;
+        }
+
+        function loadLibrary() {
+            const tx = db.transaction([storeName], "readonly");
+            const req = tx.objectStore(storeName).getAll();
+            req.onsuccess = () => {
+                const container = document.getElementById('lib-container');
+                container.innerHTML = '';
+                req.result.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'lib-item';
+                    el.draggable = true;
+                    el.ondragstart = (e) => {
+                        e.dataTransfer.effectAllowed = "copy";
+                        e.dataTransfer.setData('application/json', JSON.stringify(item));
+                    };
+
+                    // Double-clic sur l'élément (mais PAS sur le titre ni la corbeille)
+                    // => ouverture de la modale d'édition du contenu.
+                    el.addEventListener('dblclick', (e) => {
+                        if (e.target.closest('.lib-title') || e.target.closest('.delete-btn')) return;
+                        editLibContent(item);
+                    });
+
+                    let previewContent = '';
+                    if (item.type === 'text') {
+                        const cleanText = (item.content || '').replace(/<[^>]*>?/gm, '').substring(0, 50);
+                        previewContent = `<span class="lib-text-preview">${escapeHtml(cleanText)}</span>`;
+                    } else if (item.type === 'code') {
+                        // Aperçu textuel (le code) + badge JS ; le rendu miniature arrive juste après
+                        const snippet = (item.content || '').replace(/\s+/g, ' ').substring(0, 40);
+                        previewContent = `<span class="lib-code-badge">JS</span><span class="lib-text-preview">${escapeHtml(snippet)}</span>`;
+                    } else {
+                        previewContent = `<img src="${item.content}" class="lib-preview"><span class="lib-text-preview">Image</span>`;
+                    }
+
+                    const itemTitle = escapeHtml(item.title || 'Sans titre');
+
+                    el.innerHTML = `
+                        <div class="lib-header">
+                            <span class="lib-title" data-id="${item.id}" ondblclick="editLibTitle(event)">${itemTitle}</span>
+                            <button class="delete-btn" onclick="deleteFromLib(${item.id})">&times;</button>
+                        </div>
+                        <div class="lib-preview-container" title="Double-cliquez pour modifier le contenu">${previewContent}</div>
+                    `;
+                    container.appendChild(el);
+
+                    // Génération d'un aperçu miniature pour les éléments "code"
+                    // Exécution SILENCIEUSE : aucune alerte si le code plante ici
+                    if (item.type === 'code') {
+                        runCodeToImage(item.content, true).then(res => {
+                            if (res && res.dataUrl) {
+                                const prev = el.querySelector('.lib-preview-container');
+                                if (prev) {
+                                    prev.innerHTML = `<img src="${res.dataUrl}" class="lib-preview"><span class="lib-text-preview">Aperçu (JS)</span>`;
+                                }
+                            }
+                        });
+                    }
+                });
+            };
+        }
+
+        function editLibTitle(event) {
+            const span = event.target;
+            const itemId = parseInt(span.dataset.id);
+
+            span.contentEditable = true;
+            span.focus();
+
+            span.onblur = () => {
+                const newTitle = span.innerText.trim() || 'Sans titre';
+                updateLibTitle(itemId, newTitle);
+                span.contentEditable = false;
+                span.onblur = null;
+            };
+
+            span.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    span.blur();
+                }
+            };
+        }
+
+        // ============================================================
+        //  ÉDITION DU CONTENU D'UN ÉLÉMENT (modale) + APPLICATION AU PDF
+        // ============================================================
+
+        // Ouvre la modale, adaptée au type de l'élément :
+        //  - text  : zone éditable (HTML riche)
+        //  - code  : textarea monospace (code JS brut)
+        //  - image : aperçu + bouton de remplacement de fichier
+        function editLibContent(item) {
+            editingItem = { id: item.id, type: item.type, content: item.content };
+
+            const titleEl = document.getElementById('content-modal-title');
+            const body = document.getElementById('content-modal-body');
+            body.innerHTML = '';
+
+            if (item.type === 'text') {
+                titleEl.textContent = 'Modifier le texte / HTML';
+                const div = document.createElement('div');
+                div.id = 'modal-editable';
+                div.className = 'modal-editable';
+                div.contentEditable = 'true';
+                div.innerHTML = item.content || '';
+                body.appendChild(div);
+                setTimeout(() => div.focus(), 0);
+
+            } else if (item.type === 'code') {
+                titleEl.textContent = 'Modifier le code JS';
+                const ta = document.createElement('textarea');
+                ta.id = 'modal-textarea';
+                ta.className = 'modal-textarea';
+                ta.value = item.content || '';
+                body.appendChild(ta);
+                setTimeout(() => ta.focus(), 0);
+
+            } else if (item.type === 'image') {
+                titleEl.textContent = "Remplacer l'image";
+                const wrap = document.createElement('div');
+                wrap.innerHTML = `
+                    <img id="modal-img-preview" src="${item.content}"
+                         style="max-width:100%; max-height:220px; display:block; margin:0 auto 10px; border:1px solid #ddd; background:#fff;">
+                    <button class="secondary" type="button"
+                            onclick="document.getElementById('modal-img-file').click()">
+                        Choisir une nouvelle image
+                    </button>
+                    <input type="file" id="modal-img-file"
+                           accept="image/png, image/jpeg, image/webp" style="display:none;">
+                `;
+                body.appendChild(wrap);
+
+                // À la sélection d'un fichier : on met à jour le contenu de travail + l'aperçu.
+                const fileInput = wrap.querySelector('#modal-img-file');
+                fileInput.addEventListener('change', function() {
+                    if (this.files.length) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            editingItem.content = e.target.result;
+                            const prev = document.getElementById('modal-img-preview');
+                            if (prev) prev.src = e.target.result;
+                        };
+                        reader.readAsDataURL(this.files[0]);
+                    }
+                });
+            } else {
+                return;
+            }
+
+            document.getElementById('content-modal').classList.add('open');
+        }
+
+        function closeContentModal() {
+            document.getElementById('content-modal').classList.remove('open');
+            document.getElementById('content-modal-body').innerHTML = '';
+            editingItem = null;
+        }
+
+        // Enregistre le nouveau contenu (DB) puis déclenche la propagation vers le PDF.
+        function saveContentModal() {
+            if (!editingItem) return;
+            let newContent;
+
+            if (editingItem.type === 'text') {
+                newContent = document.getElementById('modal-editable').innerHTML.trim();
+                if (newContent.toLowerCase().includes('<svg')) {
+                    alert("Le format SVG n'est pas supporté pour la stabilité de la sauvegarde.");
+                    return;
+                }
+                if (!newContent) { alert('Contenu vide.'); return; }
+
+            } else if (editingItem.type === 'code') {
+                newContent = document.getElementById('modal-textarea').value.trim();
+                if (!newContent) { alert('Code vide.'); return; }
+
+            } else if (editingItem.type === 'image') {
+                newContent = editingItem.content; // remplacée ou inchangée
+                if (!newContent) { alert('Aucune image.'); return; }
+            }
+
+            updateLibContent(editingItem.id, newContent);
+            closeContentModal();
+        }
+
+        // Fermer la modale via la touche Échap
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('content-modal').classList.contains('open')) {
+                closeContentModal();
+            }
+        });
+        // Clic sur le fond assombri = fermeture
+        document.getElementById('content-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'content-modal') closeContentModal();
+        });
+
+        // ============================================================
+        //  DÉPLACEMENT FORCÉ VIA LA TOUCHE CTRL
+        // ============================================================
+        // Bascule l'état "déplacement forcé".
+        //  - on = true  : désactive le redimensionnement de tous les éléments posés
+        //                 (seul le drag reste actif, même près des bords).
+        //  - on = false : réactive le redimensionnement.
+        function setForceMove(on) {
+            if (ctrlForceMove === on) return;
+            ctrlForceMove = on;
+
+            document.querySelectorAll('.added-element').forEach(el => {
+                // interact(el) renvoie l'interactable déjà associé à l'élément ;
+                // on (dés)active uniquement le redimensionnement, le drag reste tel quel.
+                interact(el).resizable({ enabled: !on });
+            });
+
+            document.body.classList.toggle('force-move-mode', on);
+        }
+
+        // Détection de Ctrl (gère aussi le maintien pendant une répétition de touche).
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Control' || e.ctrlKey) setForceMove(true);
+        });
+        window.addEventListener('keyup', (e) => {
+            // Sécurité : si Ctrl n'est plus enfoncé, on repasse en mode normal.
+            if (e.key === 'Control' || !e.ctrlKey) setForceMove(false);
+        });
+        // Si la fenêtre perd le focus alors que Ctrl est encore pressé,
+        // on réinitialise pour ne pas rester bloqué en mode déplacement.
+        window.addEventListener('blur', () => setForceMove(false));
+
+        // --- HANDLERS ---
+        // Texte riche (HTML sans SVG)
+        function addTextToLib() {
+            const val = document.getElementById('input-text-editable').innerHTML.trim();
+            // Refuser tout SVG (non supporté par la sauvegarde stable)
+            if(val.toLowerCase().includes('<svg')) {
+                 alert("Le format SVG n'est plus supporté pour la stabilité de la sauvegarde.");
+                 return;
+            }
+            if(!val) return;
+
+            const title = (val.replace(/<[^>]*>?/gm, '').substring(0, 20) || 'Texte').trim();
+
+            saveToLib('text', val, title);
+            document.getElementById('input-text-editable').innerHTML = '';
+        }
+
+        // Ajout de code JavaScript à la bibliothèque
+        // On lit innerText (et non innerHTML) pour récupérer le code brut,
+        // avec les retours à la ligne préservés et sans entités HTML.
+        function addCodeToLib() {
+            const editable = document.getElementById('input-text-editable');
+            const code = editable.innerText.trim();
+            if (!code) return;
+
+            const title = 'Code JS : ' + code.replace(/\s+/g, ' ').substring(0, 20);
+            saveToLib('code', code, title);
+            editable.innerHTML = '';
+        }
+
+        function addImageToLib(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => saveToLib('image', e.target.result, file.name);
+            reader.readAsDataURL(file);
+        }
+
+        // Écouteur pour le bouton d'image
+        document.getElementById('image-input').addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                addImageToLib(this.files[0]);
+                this.value = ''; // Réinitialiser l'input
+            }
+        });
+
+        // --- EXÉCUTION DU CODE JS -> IMAGE (canvas -> PNG) ---
+        // Le code utilisateur reçoit `canvas` et `ctx`.
+        // Il peut être asynchrone (await), redimensionner le canvas,
+        // ou retourner un canvas / une dataURL pour surcharger le rendu.
+        // silent = true : pas d'alerte en cas d'erreur (utilisé pour les miniatures).
+        async function runCodeToImage(code, silent = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 300;
+            canvas.height = 150;
+            const ctx = canvas.getContext('2d');
+
+            try {
+                const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+                const fn = new AsyncFunction('canvas', 'ctx', code);
+                const result = await fn(canvas, ctx);
+
+                if (typeof result === 'string' && result.startsWith('data:')) {
+                    return { dataUrl: result, width: null, height: null };
+                }
+                const out = (result instanceof HTMLCanvasElement) ? result : canvas;
+                return { dataUrl: out.toDataURL('image/png'), width: out.width, height: out.height };
+
+            } catch (err) {
+                console.error('Erreur code JS :', err);
+                if (!silent) alert("Erreur d'exécution du code JS : " + err.message);
+                return null;
+            }
+        }
+
+        // --- GESTION PDF ET BUFFER ---
+        async function loadPDF(file) {
+            try {
+                const buffer = await file.arrayBuffer();
+                originalPdfBuffer = buffer.slice(0);
+                const loadingTask = pdfjsLib.getDocument(new Uint8Array(buffer));
+                pdfDocProxy = await loadingTask.promise;
+                renderAllPages();
+            } catch (err) {
+                alert("Erreur chargement PDF: " + err.message);
+            }
+        }
+
+        async function renderAllPages() {
+            const container = document.getElementById('pages-container');
+            container.innerHTML = '';
+            document.getElementById('empty-state').style.display = 'none';
+
+            for (let i = 1; i <= pdfDocProxy.numPages; i++) {
+                await renderOnePage(i, container);
+            }
+        }
+
+        async function renderOnePage(pageNum, container) {
+            const page = await pdfDocProxy.getPage(pageNum);
+            const viewport = page.getViewport({ scale: pdfScale });
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'page-wrapper';
+            wrapper.style.width = viewport.width + 'px';
+            wrapper.style.height = viewport.height + 'px';
+            wrapper.dataset.pageNum = pageNum;
+
+            // On mémorise le viewport pdf.js de la page pour la conversion écran -> PDF.
+            wrapper.pdfViewport = viewport;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            const layer = document.createElement('div');
+            layer.className = 'elements-layer';
+
+            wrapper.appendChild(canvas);
+            wrapper.appendChild(layer);
+            container.appendChild(wrapper);
+
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        }
+
+        function resetWorkspace() {
+            originalPdfBuffer = null;
+            document.getElementById('pages-container').innerHTML = '';
+            document.getElementById('empty-state').style.display = 'block';
+        }
+
+        // --- MANIPULATION ELEMENTS (Image / Texte / Code) ---
+        // Fonction ASYNCHRONE car le type "code" doit exécuter du JS avant insertion.
+        async function createElementOnPage(parentLayer, item, x, y) {
+
+            let type = item.type;
+            let content = item.content;
+            let naturalW = null, naturalH = null;
+
+            // Type "code" : on exécute le JS pour produire une image (canvas -> PNG),
+            // puis on le traite ensuite EXACTEMENT comme une image raster.
+            if (type === 'code') {
+                const result = await runCodeToImage(item.content, false);
+                if (!result) return; // erreur déjà signalée à l'utilisateur
+                content = result.dataUrl;
+                naturalW = result.width;
+                naturalH = result.height;
+                type = 'image';
+            }
+
+            const el = document.createElement('div');
+            el.className = 'added-element';
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.style.transform = 'translate(0px, 0px)';
+            el.dataset.x = 0; el.dataset.y = 0;
+            el.dataset.initLeft = x;
+            el.dataset.initTop = y;
+
+            // LIEN VERS LA BIBLIOTHÈQUE : permet la propagation des modifications de contenu.
+            // On mémorise l'id ET le type d'ORIGINE (item.type), même si "code" est rendu en image.
+            if (item.id != null) {
+                el.dataset.libId = item.id;
+                el.dataset.libType = item.type;
+            }
+
+            let defaultWidth, defaultHeight;
+            if (type === 'image') {
+                if (naturalW && naturalH) {
+                    // Image issue du code : on conserve le ratio du canvas,
+                    // en limitant la taille d'insertion à 300px max.
+                    const maxDim = 300;
+                    const ratio = Math.min(1, maxDim / Math.max(naturalW, naturalH));
+                    defaultWidth = Math.round(naturalW * ratio);
+                    defaultHeight = Math.round(naturalH * ratio);
+                } else {
+                    // Image classique de la bibliothèque : comportement d'origine
+                    defaultWidth = 150;
+                    defaultHeight = 150;
+                }
+            } else {
+                defaultWidth = 200;
+                defaultHeight = 100;
+            }
+
+            el.style.width = defaultWidth + 'px';
+            el.style.height = defaultHeight + 'px';
+
+            if (type === 'image') {
+                el.innerHTML = `<img src="${content}" draggable="false" style="width:100%; height:100%; object-fit: contain;">`;
+            } else if (type === 'text') {
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'content-text';
+                contentDiv.style.color = '#000';
+                contentDiv.style.fontSize = '16px';
+                contentDiv.innerHTML = content;
+                el.appendChild(contentDiv);
+            } else {
+                return;
+            }
+
+            el.innerHTML += `<div class="elem-delete" onpointerdown="event.stopPropagation(); this.parentElement.remove()">×</div>`;
+            parentLayer.appendChild(el);
+            initInteract(el);
+        }
+
+        function initInteract(el) {
+            interact(el)
+                .draggable({
+                    modifiers: [interact.modifiers.restrictRect({ restriction: 'parent', endOnly: true })],
+                    listeners: {
+                        move (event) {
+                            const t = event.target;
+                            const x = (parseFloat(t.dataset.x) || 0) + event.dx;
+                            const y = (parseFloat(t.dataset.y) || 0) + event.dy;
+                            t.style.transform = `translate(${x}px, ${y}px)`;
+                            t.dataset.x = x; t.dataset.y = y;
+                        }
+                    }
+                })
+                .resizable({
+                    // Si Ctrl est déjà maintenu au moment de la création de l'élément,
+                    // on démarre directement avec le redimensionnement désactivé.
+                    enabled: !ctrlForceMove,
+                    edges: { left: true, right: true, bottom: true, top: true },
+                    listeners: {
+                        move (event) {
+                            let { x, y } = event.target.dataset;
+                            x = (parseFloat(x) || 0) + event.deltaRect.left;
+                            y = (parseFloat(y) || 0) + event.deltaRect.top;
+
+                            Object.assign(event.target.style, {
+                                width: `${event.rect.width}px`, height: `${event.rect.height}px`,
+                                transform: `translate(${x}px, ${y}px)`
+                            });
+                            Object.assign(event.target.dataset, { x, y });
+                        }
+                    }
+                });
+        }
+
+        // --- DRAG & DROP SYSTEM ---
+        const mainArea = document.getElementById('main-area');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+            mainArea.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+        });
+
+        mainArea.addEventListener('dragenter', () => mainArea.classList.add('drag-active'));
+        mainArea.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget === null || e.target === document.getElementById('drop-overlay')) {
+                 mainArea.classList.remove('drag-active');
+            }
+        });
+
+        // Callback ASYNCHRONE pour pouvoir "await" la génération d'image du code
+        mainArea.addEventListener('drop', async (e) => {
+            mainArea.classList.remove('drag-active');
+
+            // 1. Fichiers externes (PDF ou Image)
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                [...files].forEach(file => {
+                    if (file.type === 'application/pdf') loadPDF(file);
+                    else if (file.type.startsWith('image/')) addImageToLib(file);
+                });
+                return;
+            }
+
+            // 2. Élément de la bibliothèque (texte, image ou code)
+            if (originalPdfBuffer) {
+                let itemData;
+                try {
+                    const data = e.dataTransfer.getData('application/json');
+                    itemData = JSON.parse(data);
+                } catch (error) {
+                    return;
+                }
+
+                if (itemData) {
+                    const targetEl = document.elementFromPoint(e.clientX, e.clientY);
+                    const pageWrapper = targetEl ? targetEl.closest('.page-wrapper') : null;
+
+                    if (pageWrapper) {
+                        const layer = pageWrapper.querySelector('.elements-layer');
+                        const rect = layer.getBoundingClientRect();
+                        await createElementOnPage(layer, itemData, e.clientX - rect.left, e.clientY - rect.top);
+                    }
+                }
+            }
+        });
+
+
+        // --- SAUVEGARDE ---
+        // IMAGES / CODE : embarquées directement (pas de html2canvas) en respectant
+        //                 object-fit: contain  =>  plus d'étirement vertical.
+        // TEXTE / HTML  : capture html2canvas (nécessaire pour rendre le HTML).
+        async function savePDF() {
+            if (!originalPdfBuffer) {
+                alert("Erreur: PDF source perdu ou non chargé.");
+                return;
+            }
+
+            const btn = document.querySelector('button[onclick="savePDF()"]');
+            btn.innerText = "Traitement..."; btn.disabled = true;
+
+            try {
+                const pdfDoc = await PDFLib.PDFDocument.load(originalPdfBuffer);
+                const pageWrappers = document.querySelectorAll('.page-wrapper');
+
+                for (let wrapper of pageWrappers) {
+                    const pageNum = parseInt(wrapper.dataset.pageNum);
+                    const elements = wrapper.querySelectorAll('.added-element');
+                    if (elements.length === 0) continue;
+
+                    const pdfPage = pdfDoc.getPage(pageNum - 1);
+                    const viewport = wrapper.pdfViewport; // viewport pdf.js mémorisé au rendu
+
+                    // Helper : point écran (px, origine haut-gauche du wrapper) -> point PDF.
+                    const toPdf = (vx, vy) => {
+                        if (viewport && typeof viewport.convertToPdfPoint === 'function') {
+                            const p = viewport.convertToPdfPoint(vx, vy);
+                            return { x: p[0], y: p[1] };
+                        }
+                        // Fallback si convertToPdfPoint indisponible
+                        const { width: pw, height: ph } = pdfPage.getSize();
+                        const sX = pw / wrapper.offsetWidth;
+                        const sY = ph / wrapper.offsetHeight;
+                        return { x: vx * sX, y: ph - vy * sY };
+                    };
+
+                    for (let el of elements) {
+                        el.querySelector('.elem-delete').style.display = 'none';
+
+                        const dx = parseFloat(el.dataset.x) || 0;
+                        const dy = parseFloat(el.dataset.y) || 0;
+                        const initLeft = parseFloat(el.dataset.initLeft) || 0;
+                        const initTop = parseFloat(el.dataset.initTop) || 0;
+                        const finalLeft = initLeft + dx;
+                        const finalTop = initTop + dy;
+
+                        // Dimensions écran (box CSS) de l'élément
+                        const elRect = el.getBoundingClientRect();
+                        const w = elRect.width;
+                        const h = elRect.height;
+
+                        // Coins de la box en coordonnées PDF (gère échelle, CropBox, rotation)
+                        const A = toPdf(finalLeft, finalTop);          // haut-gauche
+                        const C = toPdf(finalLeft + w, finalTop + h);  // bas-droite
+                        const D = toPdf(finalLeft, finalTop + h);      // bas-gauche (origine dessin pdf-lib)
+
+                        const boxW  = Math.hypot(C.x - D.x, C.y - D.y);
+                        const boxH  = Math.hypot(A.x - D.x, A.y - D.y);
+                        const angle = Math.atan2(C.y - D.y, C.x - D.x) * 180 / Math.PI;
+
+                        // Vecteurs unitaires des axes de la box (pour un placement correct même si la page est pivotée)
+                        const ux = boxW ? (C.x - D.x) / boxW : 1;
+                        const uy = boxW ? (C.y - D.y) / boxW : 0;
+                        const vx = boxH ? (A.x - D.x) / boxH : 0;
+                        const vy = boxH ? (A.y - D.y) / boxH : 1;
+
+                        const contentImg = el.querySelector('img');
+                        const isText = !!el.querySelector('.content-text');
+
+                        if (contentImg && !isText) {
+                            // ---------- IMAGE / CODE : embarquement direct + object-fit contain ----------
+                            const src = contentImg.src;
+                            const imgEl = await loadImage(src);
+                            const iw = imgEl.naturalWidth || 1;
+                            const ih = imgEl.naturalHeight || 1;
+
+                            // Normalisation en PNG (uniformise png / jpeg / webp)
+                            const tmp = document.createElement('canvas');
+                            tmp.width = iw;
+                            tmp.height = ih;
+                            tmp.getContext('2d').drawImage(imgEl, 0, 0);
+                            const pdfImg = await pdfDoc.embedPng(tmp.toDataURL('image/png'));
+
+                            // Reproduction exacte de object-fit: contain (ratio préservé, centré)
+                            const fit  = Math.min(boxW / iw, boxH / ih);
+                            const fitW = iw * fit;
+                            const fitH = ih * fit;
+                            const offX = (boxW - fitW) / 2;
+                            const offY = (boxH - fitH) / 2;
+
+                            // Origine (coin bas-gauche de l'image ajustée) exprimée le long des axes de la box
+                            const ox = D.x + ux * offX + vx * offY;
+                            const oy = D.y + uy * offX + vy * offY;
+
+                            pdfPage.drawImage(pdfImg, {
+                                x: ox,
+                                y: oy,
+                                width: fitW,
+                                height: fitH,
+                                rotate: PDFLib.degrees(angle)
+                            });
+
+                            el.querySelector('.elem-delete').style.display = '';
+
+                        } else {
+                            // ---------- TEXTE / HTML : capture html2canvas (remplit la box) ----------
+                            const oldTransform = el.style.transform;
+                            const oldLeft = el.style.left;
+                            const oldTop = el.style.top;
+
+                            el.style.left = `${finalLeft}px`;
+                            el.style.top = `${finalTop}px`;
+                            el.style.transform = 'none';
+
+                            const canvas = await html2canvas(el, { backgroundColor: null, scale: 2 });
+                            const imgData = canvas.toDataURL('image/png');
+
+                            el.style.transform = oldTransform;
+                            el.style.left = oldLeft;
+                            el.style.top = oldTop;
+                            el.querySelector('.elem-delete').style.display = '';
+
+                            const pdfImg = await pdfDoc.embedPng(imgData);
+                            pdfPage.drawImage(pdfImg, {
+                                x: D.x,
+                                y: D.y,
+                                width: boxW,
+                                height: boxH,
+                                rotate: PDFLib.degrees(angle)
+                            });
+                        }
+                    }
+                }
+
+                const pdfBytes = await pdfDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `pdf-edited-${Date.now()}.pdf`;
+                link.click();
+            } catch (err) {
+                console.error(err);
+                alert("Erreur sauvegarde: " + err.message);
+            } finally {
+                btn.innerText = "💾 Sauvegarder PDF"; btn.disabled = false;
+            }
+        }
+
+        initDB();
+    </script>
+</body>
+</html>
