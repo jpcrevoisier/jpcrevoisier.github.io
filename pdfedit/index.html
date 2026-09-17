@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Éditeur PDF Stable V18 - Ctrl force le déplacement (au lieu du redimensionnement)</title>
+    <title>Éditeur PDF Stable V19 - Ctrl force le déplacement (au lieu du redimensionnement)</title>
 	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>📝</text></svg>">
 
 
@@ -527,6 +527,7 @@ CanvasRenderingContext2D.prototype.applyStampWear = function(intensity = 0.50, i
         let db;
 
         let originalPdfBuffer = null;
+        let originalFileName = 'document-edite.pdf';
         let pdfDocProxy = null;
         let pdfScale = 1.5;
 
@@ -956,6 +957,7 @@ CanvasRenderingContext2D.prototype.applyStampWear = function(intensity = 0.50, i
         // --- GESTION PDF ET BUFFER ---
         async function loadPDF(file) {
             try {
+                originalFileName = file.name || 'document-edite.pdf';
                 const buffer = await file.arrayBuffer();
                 originalPdfBuffer = buffer.slice(0);
                 const loadingTask = pdfjsLib.getDocument(new Uint8Array(buffer));
@@ -1311,7 +1313,9 @@ CanvasRenderingContext2D.prototype.applyStampWear = function(intensity = 0.50, i
                 const blob = new Blob([pdfBytes], { type: 'application/pdf' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `pdf-edited-${Date.now()}.pdf`;
+                                // Conserver le nom d'origine ou ajouter un suffixe si souhaité, mais ici exactement le même nom ou avec suffixe propre. 
+                // L'utilisateur demande explicitement : "je veux que le nom de fichier a sauvegarder soit le même que le nom de fichier qui a été déposé"
+                link.download = originalFileName;
                 link.click();
             } catch (err) {
                 console.error(err);
