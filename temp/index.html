@@ -1,984 +1,911 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>📝</text></svg>">
-<title>Notes</title>
-<script src="../repo.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Éditeur PDF Stable V20 - Collections par nom de PDF</title>
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>📝</text></svg>">
 
-<style>
-* { box-sizing: border-box; }
 
-:root {
-    --bg: #f5f6f8;
-    --panel: #ffffff;
-    --border: #dcdfe4;
-    --text: #202124;
-    --muted: #6b7078;
-    --accent: #194979;
-    --accent-light: #e8f0f8;
-    --danger: #b42318;
-}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-html, body {
-    margin: 0;
-    width: 100%;
-    height: 100%;
-    font-family: Arial, Helvetica, sans-serif;
-    color: var(--text);
-    background: var(--bg);
-}
+    <style>
+        :root {
+            --sidebar-width: 300px;
+            --bg-color: #525659;
+            --primary: #2563eb;
+            --danger: #dc2626;
+        }
 
-body {
-    display: flex;
-    overflow: hidden;
-}
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; height: 100vh; display: flex; overflow: hidden; }
 
-.sidebar {
-    width: 320px;
-    min-width: 320px;
-    height: 100vh;
-    background: var(--panel);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-}
+        aside {
+            width: var(--sidebar-width);
+            background: #fff;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            overflow-y: auto;
+            z-index: 20;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
 
-.sidebar-header {
-    padding: 18px;
-    border-bottom: 1px solid var(--border);
-}
+        h2, h3 { margin-top: 0; font-size: 1.1rem; color: #333; }
+        .control-group { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
 
-.app-title {
-    font-size: 21px;
-    font-weight: 700;
-    margin-bottom: 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        button:hover { opacity: 0.9; }
+        button.secondary { background: #64748b; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
 
-.search {
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    padding: 10px 12px;
-    font-size: 14px;
-    outline: none;
-}
+        #input-text-editable {
+            width: 100%;
+            min-height: 80px;
+            margin-bottom: 8px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            overflow-y: auto;
+            cursor: text;
+            font-family: 'Segoe UI', monospace;
+            white-space: pre-wrap;
+        }
+        #input-text-editable:empty:before {
+            content: "Saisir du texte HTML, ou coller du code JS...";
+            color: #aaa;
+        }
+        #input-text-editable:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px var(--primary);
+        }
 
-.search:focus { border-color: var(--accent); }
+        .lib-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 8px;
+            padding: 8px;
+            cursor: grab;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: stretch;
+            border-radius: 4px;
+            user-select: none;
+        }
+        .lib-item:active { cursor: grabbing; }
 
-.sidebar-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 10px;
-}
+        .lib-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .lib-title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+            flex-grow: 1;
+        }
+        .lib-preview-container {
+            display: flex;
+            align-items: center;
+            border-top: 1px solid #eee;
+            padding-top: 5px;
+            cursor: pointer;
+        }
+        .lib-preview { max-width: 40px; max-height: 40px; object-fit: contain; margin-right: 10px; border: 1px solid #ddd; background: #fff; }
+        .lib-text-preview { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .delete-btn { width: auto; background: transparent; color: var(--danger); padding: 0 6px; font-size: 1.2rem; margin:0; }
 
-button, .file-button {
-    border: 0;
-    border-radius: 7px;
-    padding: 9px 12px;
-    font-size: 14px;
-    cursor: pointer;
-    background: #e9ebee;
-    color: var(--text);
-}
+        .lib-code-badge {
+            display: inline-block;
+            background: #0f172a;
+            color: #38bdf8;
+            font-family: monospace;
+            font-size: 0.7rem;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
 
-button:hover, .file-button:hover { filter: brightness(.96); }
+        main {
+            flex: 1;
+            background: var(--bg-color);
+            position: relative;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 0;
+        }
+        #pages-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding-bottom: 50px;
+        }
+        .page-wrapper {
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            background: white;
+        }
+        canvas { display: block; }
+        .elements-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            z-index: 10;
+        }
+        .added-element {
+            position: absolute;
+            border: 1px dashed transparent;
+            cursor: move;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+        .added-element:hover, .added-element.selected { border: 1px dashed var(--primary); background: rgba(37, 99, 235, 0.1); }
+        .added-element img { width: 100%; height: 100%; pointer-events: none; display: block; object-fit: contain; }
+        .added-element .content-text {
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            word-wrap: break-word;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
 
-.primary { background: var(--accent); color: white; }
-.danger { color: var(--danger); }
-.icon-btn { background: transparent; padding: 4px 8px; font-size: 16px; }
+        body.force-move-mode .added-element { cursor: move !important; }
+        body.force-move-mode .added-element:hover,
+        body.force-move-mode .added-element.selected { border-color: #16a34a; background: rgba(22, 163, 74, 0.12); }
 
-.notes-list {
-    flex: 1;
-    overflow-y: auto;
-}
+        .elem-delete {
+            position: absolute;
+            top: -12px; right: -12px;
+            background: var(--danger);
+            color: white;
+            border-radius: 50%;
+            width: 24px; height: 24px;
+            font-size: 14px;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 20;
+        }
+        .added-element:hover .elem-delete { display: flex; }
 
-.note-item {
-    padding: 13px 17px;
-    border-bottom: 1px solid #eeeeee;
-    cursor: pointer;
-}
+        #drop-overlay {
+            position: fixed;
+            top: 0; left: var(--sidebar-width); right: 0; bottom: 0;
+            background: rgba(37, 99, 235, 0.2);
+            border: 4px dashed var(--primary);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            color: white;
+            pointer-events: none;
+            z-index: 100;
+        }
+        main.drag-active #drop-overlay { display: flex; }
 
-.note-item:hover { background: #f7f8fa; }
-.note-item.active {
-    background: var(--accent-light);
-    border-left: 4px solid var(--accent);
-    padding-left: 13px;
-}
+        #empty-state {
+            color: #ccc;
+            margin-top: 20vh;
+            text-align: center;
+        }
+        #file-input { display: none; }
+        #image-input { display: none; }
 
-.note-item-title {
-    font-size: 15px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
+        .code-help { margin-top: 8px; font-size: 0.8rem; color: #555; }
+        .code-help summary { cursor: pointer; }
+        .code-help pre {
+            white-space: pre-wrap;
+            background: #f1f5f9;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
 
-.note-item-preview {
-    margin-top: 5px;
-    color: var(--muted);
-    font-size: 13px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.note-item-date {
-    margin-top: 7px;
-    color: var(--muted);
-    font-size: 11px;
-}
-
-.editor {
-    flex: 1;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.editor-header {
-    height: 62px;
-    min-height: 62px;
-    background: var(--panel);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 18px;
-}
-
-.title-input {
-    flex: 1;
-    border: 0;
-    outline: none;
-    font-size: 21px;
-    font-weight: 600;
-    min-width: 0;
-}
-
-.status {
-    color: var(--muted);
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-.editor-content {
-    flex: 1;
-    padding: 25px;
-    overflow: auto;
-}
-
-.content-input {
-    width: 100%;
-    min-height: 100%;
-    resize: none;
-    border: 0;
-    outline: none;
-    background: transparent;
-    color: var(--text);
-    font-family: inherit;
-    font-size: 16px;
-    line-height: 1.65;
-}
-
-.empty {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: var(--muted);
-}
-
-.empty-inner { max-width: 400px; }
-.empty-inner h2 { color: var(--text); }
-
-.modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-}
-
-.modal-backdrop.active {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.modal {
-    background: var(--panel);
-    width: 100%;
-    max-width: 450px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    padding: 20px;
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.modal-title { font-size: 18px; font-weight: 700; }
-.form-group { margin-bottom: 12px; }
-.form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-.form-group input {
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 10px;
-    font-size: 14px;
-    outline: none;
-}
-
-.form-group input:focus { border-color: var(--accent); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-
-.mobile-menu { display: none; }
-
-@media (max-width: 700px) {
-    .sidebar { width: 100%; min-width: 0; }
-    .editor { display: none; }
-    body.editing .sidebar { display: none; }
-    body.editing .editor { display: flex; }
-    .mobile-menu { display: block; }
-    .editor-header { padding-left: 10px; }
-    .editor-content { padding: 15px; }
-    .status { display: none; }
-}
-
-#fileInput { display: none; }
-</style>
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            background: #fff;
+            width: min(640px, 92vw);
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: 8px;
+            padding: 1.2rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+        }
+        .modal-editable {
+            min-height: 150px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .modal-textarea {
+            width: 100%;
+            min-height: 240px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 1rem;
+        }
+        .modal-actions button { margin-bottom: 0; }
+    </style>
 </head>
-
 <body>
 
-<aside class="sidebar">
-    <div class="sidebar-header">
-        <div class="app-title">
-            <span>Mes notes</span>
-            <button id="openGitConfig" class="icon-btn" type="button" title="Configuration Git">⚙️</button>
+    <aside>
+        <div class="control-group">
+            <h2>Gestion Document</h2>
+            <button onclick="document.getElementById('file-input').click()">📂 Ouvrir un PDF</button>
+            <input type="file" id="file-input" accept="application/pdf">
+            <button class="secondary" onclick="savePDF()">💾 Sauvegarder PDF</button>
+            <button class="secondary" style="background:#eab308; margin-top:10px;" onclick="resetWorkspace()">🗑️ Reset</button>
         </div>
-        <input id="search" class="search" type="search" placeholder="Rechercher..." autocomplete="off">
-        <div class="sidebar-actions">
-            <button id="newNote" class="primary" type="button">+ Nouvelle note</button>
-            <button id="syncNotes" type="button">Synchroniser</button>
-            <button id="exportAll" type="button">Exporter</button>
-            <label for="fileInput" class="file-button" style="text-align:center">Importer</label>
-            <button id="deleteNote" class="danger" type="button" style="grid-column: span 2;">Supprimer</button>
+
+        <div class="control-group">
+            <h3>Ajouter Texte / Code</h3>
+            <div id="input-text-editable" contenteditable="true"></div>
+            <button onclick="addTextToLib()">Ajouter Texte HTML à la bibliothèque</button>
+            <button class="secondary" onclick="addCodeToLib()">&lt;/&gt; Ajouter Code JS à la bibliothèque</button>
         </div>
-        <input id="fileInput" type="file" accept=".json,application/json">
-    </div>
-    <div id="notesList" class="notes-list"></div>
-</aside>
 
-<main class="editor">
-    <header class="editor-header">
-        <button id="backButton" class="mobile-menu" type="button">←</button>
-        <input id="title" class="title-input" type="text" placeholder="Titre de la note" autocomplete="off">
-        <span id="status" class="status">Enregistré</span>
-        <button id="exportCurrent" type="button">Exporter</button>
-    </header>
-    <section class="editor-content">
-        <textarea id="content" class="content-input" placeholder="Commencez à écrire..." spellcheck="true"></textarea>
-    </section>
-</main>
-
-<div id="empty" class="empty">
-    <div class="empty-inner">
-        <h2>Aucune note sélectionnée</h2>
-        <p>Créez une nouvelle note pour commencer.</p>
-        <button id="emptyNewNote" class="primary" type="button">+ Nouvelle note</button>
-    </div>
-</div>
-
-<div id="gitModal" class="modal-backdrop">
-    <div class="modal">
-        <div class="modal-header">
-            <div class="modal-title">Configuration GitHub API</div>
-            <button id="closeGitModal" class="icon-btn" type="button">✕</button>
+        <div class="control-group">
+            <h3>Ajouter Image (PNG/JPG/WebP)</h3>
+            <button onclick="document.getElementById('image-input').click()">🖼️ Ajouter une Image</button>
+            <input type="file" id="image-input" accept="image/png, image/jpeg, image/webp">
         </div>
-        <form id="gitConfigForm">
-            <div class="form-group">
-                <label for="gitOwner">Utilisateur / Organisation (owner)</label>
-                <input type="text" id="gitOwner" placeholder="ex: octocat" required>
+
+        <div class="control-group" style="flex:1; display:flex; flex-direction:column; border:none; padding-bottom:0;">
+            <h3>Bibliothèque</h3>
+            <div style="font-size:0.8rem; color:#666; margin-bottom:10px;">
+                Glissez-déposez les éléments sur le PDF. Leurs positions sont mémorisées par nom de fichier.
             </div>
-            <div class="form-group">
-                <label for="gitRepo">Dépôt (repo)</label>
-                <input type="text" id="gitRepo" placeholder="ex: mes-notes" required>
-            </div>
-            <div class="form-group">
-                <label for="gitFolder">Dossier des notes dans le dépôt</label>
-                <input type="text" id="gitFolder" placeholder="ex: notes" value="notes" required>
-            </div>
-            <div class="form-group">
-                <label for="gitToken">Personal Access Token (PAT)</label>
-                <input type="password" id="gitToken" placeholder="ghp_xxxxxxxxxxxx" required>
-            </div>
+            <div id="lib-container" style="flex:1; overflow-y:auto;"></div>
+        </div>
+    </aside>
+
+    <main id="main-area">
+        <div id="drop-overlay">Déposer ici</div>
+        <div id="empty-state">
+            <h1>Aucun PDF chargé</h1>
+            <p>Ouvrez un fichier ou glissez-le ici.</p>
+        </div>
+        <div id="pages-container"></div>
+    </main>
+
+    <div id="content-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="content-modal-title">Modifier le contenu</h3>
+            <div id="content-modal-body"></div>
             <div class="modal-actions">
-                <button type="button" id="cancelGitConfig">Annuler</button>
-                <button type="submit" class="primary">Enregistrer</button>
+                <button class="secondary" onclick="closeContentModal()">Annuler</button>
+                <button onclick="saveContentModal()">Enregistrer &amp; appliquer</button>
             </div>
-        </form>
+        </div>
     </div>
-</div>
 
-<script>
-"use strict";
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-const DB_NAME = "StandaloneNotesDB";
-const DB_VERSION = 3;
-const STORE_NOTES = "notes";
-const STORE_CONFIG = "config";
-const SYNC_INTERVAL_MS = 30000;
+        const dbName = "PdfEditorDB_V20";
+        const storeName = "library";
+        const collectionsStoreName = "pdfCollections"; // Stocke les positions par nom de fichier
+        let db;
 
-let db = null;
-let currentNoteId = null;
-let saveDebounceTimer = null;
-let isSyncing = false;
-let periodicSyncTimer = null;
-let isDirty = false;
+        let originalPdfBuffer = null;
+        let originalFileName = 'document-edite.pdf';
+        let pdfDocProxy = null;
+        let pdfScale = 1.5;
+        let editingItem = null;
+        let ctrlForceMove = false;
 
-const notesList = document.getElementById("notesList");
-const searchInput = document.getElementById("search");
-const titleInput = document.getElementById("title");
-const contentInput = document.getElementById("content");
-const status = document.getElementById("status");
-const empty = document.getElementById("empty");
-const editor = document.querySelector(".editor");
-
-const gitModal = document.getElementById("gitModal");
-const openGitConfigBtn = document.getElementById("openGitConfig");
-const closeGitModalBtn = document.getElementById("closeGitModal");
-const cancelGitConfigBtn = document.getElementById("cancelGitConfig");
-const gitConfigForm = document.getElementById("gitConfigForm");
-
-/* --------------------------------------------------
-   IndexedDB
--------------------------------------------------- */
-
-function openDatabase() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        request.onerror = () => reject(request.error);
-
-        request.onupgradeneeded = event => {
-            const database = event.target.result;
-            if (!database.objectStoreNames.contains(STORE_NOTES)) {
-                const store = database.createObjectStore(STORE_NOTES, { keyPath: "id" });
-                store.createIndex("updatedAt", "updatedAt", { unique: false });
-            }
-            if (!database.objectStoreNames.contains(STORE_CONFIG)) {
-                database.createObjectStore(STORE_CONFIG);
-            }
-        };
-
-        request.onsuccess = () => {
-            db = request.result;
-            resolve(db);
-        };
-    });
-}
-
-function getAllRawNotes() {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE_NOTES, "readonly");
-        const store = transaction.objectStore(STORE_NOTES);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-async function getAllNotes() {
-    const rawNotes = await getAllRawNotes();
-    return rawNotes
-        .filter(note => !note.deletedAt)
-        .sort((a, b) => b.updatedAt - a.updatedAt);
-}
-
-function getNote(id) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE_NOTES, "readonly");
-        const request = transaction.objectStore(STORE_NOTES).get(id);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-function saveNoteToIDB(note) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE_NOTES, "readwrite");
-        transaction.objectStore(STORE_NOTES).put(note);
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-    });
-}
-
-function hardDeleteNoteFromDB(id) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE_NOTES, "readwrite");
-        transaction.objectStore(STORE_NOTES).delete(id);
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-    });
-}
-
-function getGitConfig() {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE_CONFIG, "readonly");
-        const store = transaction.objectStore(STORE_CONFIG);
-        const request = store.get("github");
-        request.onsuccess = () => resolve(request.result || null);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-function saveGitConfig(config) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE_CONFIG, "readwrite");
-        const store = transaction.objectStore(STORE_CONFIG);
-        store.put(config, "github");
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-    });
-}
-
-/* --------------------------------------------------
-   Synchronisation & Git Operations
--------------------------------------------------- */
-
-function createRepoInstance(config) {
-    if (!config || !config.owner || !config.repo || !config.token) {
-        throw new Error("Configuration GitHub manquante.");
-    }
-    return new Repo({
-        owner: config.owner,
-        repo: config.repo,
-        pat: config.token
-    });
-}
-
-async function syncNotes(silent = false) {
-    if (!navigator.onLine || isSyncing) return;
-
-    const config = await getGitConfig();
-    if (!config) {
-        if (!silent) openGitModal();
-        return;
-    }
-
-    const folder = (config.folder || "notes").replace(/\/+$|^\/+/g, "");
-    isSyncing = true;
-    const syncBtn = document.getElementById("syncNotes");
-    const originalText = syncBtn.textContent;
-
-    try {
-        syncBtn.textContent = "Sync...";
-        syncBtn.disabled = true;
-        if (!silent) status.textContent = "Synchronisation...";
-
-        const repo = createRepoInstance(config);
-
-        let remoteItems = [];
-        try {
-            const listResult = await repo.fetch(folder);
-            if (Array.isArray(listResult)) {
-                remoteItems = listResult;
-            } else if (listResult && listResult.content && Array.isArray(listResult.content)) {
-                remoteItems = listResult.content;
-            }
-        } catch (e) {
-            if (!e.message.includes("404")) throw e;
+        function escapeHtml(s) {
+            return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
-        const remoteFilesMap = new Map();
-        for (const item of remoteItems) {
-            if (item.type === "file" && item.name.endsWith(".json")) {
-                const noteId = item.name.replace(/\.json$/, "");
-                remoteFilesMap.set(noteId, { path: item.path, sha: item.sha });
-            }
+        async function initDB() {
+            return new Promise((resolve) => {
+                const request = indexedDB.open(dbName, 2);
+                request.onupgradeneeded = (e) => {
+                    db = e.target.result;
+                    if (!db.objectStoreNames.contains(storeName)) {
+                        db.createObjectStore(storeName, { keyPath: "id", autoIncrement: true });
+                    }
+                    if (!db.objectStoreNames.contains(collectionsStoreName)) {
+                        db.createObjectStore(collectionsStoreName, { keyPath: "fileName" });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    db = e.target.result;
+                    loadLibrary();
+                    resolve(db);
+                };
+            });
         }
 
-        const remoteNotesMap = new Map();
-        for (const [id, fileInfo] of remoteFilesMap.entries()) {
-            try {
-                const res = await repo.fetch(fileInfo.path);
-                if (res && res.content) {
-                    const noteData = typeof res.content === "string" ? JSON.parse(res.content) : res.content;
-                    remoteNotesMap.set(id, { note: noteData, sha: res.sha || fileInfo.sha });
+        function saveToLib(type, content, title = 'Nouvel Élément') {
+            const tx = db.transaction([storeName], "readwrite");
+            const item = { type, content, title, date: new Date() };
+            tx.objectStore(storeName).add(item);
+            tx.oncomplete = loadLibrary;
+        }
+
+        function updateLibTitle(id, newTitle) {
+            const tx = db.transaction([storeName], "readwrite");
+            const store = tx.objectStore(storeName);
+            const request = store.get(id);
+            request.onsuccess = () => {
+                const item = request.result;
+                if (item) {
+                    item.title = newTitle;
+                    store.put(item);
+                    tx.oncomplete = loadLibrary;
                 }
-            } catch (e) {
-                console.warn(`Erreur lecture distante ${fileInfo.path}:`, e);
-            }
-        }
-
-        const localRawNotes = await getAllRawNotes();
-        const localNotesMap = new Map();
-        for (const note of localRawNotes) {
-            localNotesMap.set(note.id, note);
-        }
-
-        const allIds = new Set([...localNotesMap.keys(), ...remoteNotesMap.keys()]);
-
-        for (const id of allIds) {
-            // Si la note est en cours d'édition locale et modifiée, on ne la remplace pas depuis le distant
-            if (id === currentNoteId && isDirty) {
-                continue;
-            }
-
-            const local = localNotesMap.get(id);
-            const remoteEntry = remoteNotesMap.get(id);
-            const remote = remoteEntry ? remoteEntry.note : null;
-
-            if (local && remote) {
-                const winner = (remote.updatedAt || 0) > (local.updatedAt || 0) ? remote : local;
-                await saveNoteToIDB(winner);
-            } else if (remote) {
-                await saveNoteToIDB(remote);
-            } else if (local && local.deletedAt) {
-                await hardDeleteNoteFromDB(id);
-            }
-        }
-
-        await renderNotes();
-
-        if (currentNoteId && !isDirty) {
-            const current = await getNote(currentNoteId);
-            if (!current || current.deletedAt) {
-                closeEditor();
-            } else {
-                titleInput.value = current.title || "";
-                contentInput.value = current.content || "";
-            }
-        }
-
-        if (!isDirty) {
-            status.textContent = "Enregistré";
-        }
-    } catch (error) {
-        console.error("Erreur de synchronisation :", error);
-        if (!silent) alert("Échec de la synchronisation : " + error.message);
-    } finally {
-        syncBtn.textContent = originalText;
-        syncBtn.disabled = false;
-        isSyncing = false;
-    }
-}
-
-async function verifyAndSyncSingleNote(id) {
-    if (!navigator.onLine || isDirty) return;
-
-    const config = await getGitConfig();
-    if (!config) return;
-
-    const folder = (config.folder || "notes").replace(/\/+$|^\/+/g, "");
-
-    try {
-        const repo = createRepoInstance(config);
-        const remotePath = `${folder}/${id}.json`;
-        
-        let remoteRes;
-        try {
-            remoteRes = await repo.fetch(remotePath);
-        } catch (e) {
-            return;
-        }
-
-        if (remoteRes && remoteRes.content) {
-            const remoteNote = typeof remoteRes.content === "string" ? JSON.parse(remoteRes.content) : remoteRes.content;
-            const localNote = await getNote(id);
-
-            if (!localNote || (remoteNote.updatedAt || 0) > (localNote.updatedAt || 0)) {
-                await saveNoteToIDB(remoteNote);
-                if (currentNoteId === id && !isDirty) {
-                    titleInput.value = remoteNote.title || "";
-                    contentInput.value = remoteNote.content || "";
-                }
-                await renderNotes();
-            }
-        }
-    } catch (e) {
-        console.warn(`Erreur vérification note ${id}:`, e);
-    }
-}
-
-async function pushNoteToGit(note, commitMessage) {
-    const config = await getGitConfig();
-    if (!config) return;
-
-    const folder = (config.folder || "notes").replace(/\/+$|^\/+/g, "");
-    const repo = createRepoInstance(config);
-
-    status.textContent = "Push vers Git...";
-
-    await repo.push({
-        files: [{
-            path: `${folder}/${note.id}.json`,
-            content: note
-        }],
-        message: commitMessage
-    });
-
-    isDirty = false;
-    status.textContent = "Enregistré";
-}
-
-async function deleteNoteFromGit(id, commitMessage) {
-    const config = await getGitConfig();
-    if (!config) return;
-
-    const folder = (config.folder || "notes").replace(/\/+$|^\/+/g, "");
-    const repo = createRepoInstance(config);
-
-    status.textContent = "Suppression Git...";
-
-    try {
-        await repo.delete(`${folder}/${id}.json`, commitMessage);
-    } catch (e) {
-        console.warn("Fichier non trouvé sur le repo distant lors de la suppression.", e);
-    }
-
-    isDirty = false;
-    status.textContent = "Enregistré";
-}
-
-/* --------------------------------------------------
-   UI & Actions
--------------------------------------------------- */
-
-function generateId() {
-    return Date.now().toString(36) + "-" + crypto.randomUUID();
-}
-
-function formatDate(timestamp) {
-    return new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" }).format(timestamp);
-}
-
-function escapeHTML(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-async function renderNotes() {
-    const notes = await getAllNotes();
-    const search = searchInput.value.trim().toLowerCase();
-
-    const filtered = notes.filter(note => {
-        if (!search) return true;
-        return (note.title && note.title.toLowerCase().includes(search)) ||
-               (note.content && note.content.toLowerCase().includes(search));
-    });
-
-    notesList.innerHTML = "";
-
-    for (const note of filtered) {
-        const item = document.createElement("div");
-        item.className = "note-item" + (note.id === currentNoteId ? " active" : "");
-
-        const title = (note.title && note.title.trim()) || "Sans titre";
-        const preview = (note.content && note.content.replace(/\s+/g, " ").trim()) || "Note vide";
-
-        item.innerHTML = `
-            <div class="note-item-title">${escapeHTML(title)}</div>
-            <div class="note-item-preview">${escapeHTML(preview)}</div>
-            <div class="note-item-date">${escapeHTML(formatDate(note.updatedAt))}</div>
-        `;
-
-        item.addEventListener("click", () => openNote(note.id));
-        notesList.appendChild(item);
-    }
-}
-
-async function openNote(id) {
-    if (isDirty) {
-        await saveCurrentNote();
-    }
-
-    const note = await getNote(id);
-    if (!note || note.deletedAt) return;
-
-    currentNoteId = note.id;
-    isDirty = false;
-    titleInput.value = note.title || "";
-    contentInput.value = note.content || "";
-
-    empty.style.display = "none";
-    editor.style.display = "flex";
-    document.body.classList.add("editing");
-
-    await renderNotes();
-
-    await verifyAndSyncSingleNote(id);
-}
-
-function closeEditor() {
-    currentNoteId = null;
-    isDirty = false;
-    titleInput.value = "";
-    contentInput.value = "";
-    editor.style.display = "none";
-    empty.style.display = "flex";
-    document.body.classList.remove("editing");
-}
-
-async function createNote() {
-    if (isDirty) {
-        await saveCurrentNote();
-    }
-
-    const now = Date.now();
-    const note = {
-        id: generateId(),
-        title: "",
-        content: "",
-        createdAt: now,
-        updatedAt: now
-    };
-
-    await saveNoteToIDB(note);
-    await renderNotes();
-    await openNote(note.id);
-
-    try {
-        await pushNoteToGit(note, `Création de la note ${note.id}`);
-    } catch (e) {
-        console.error("Erreur push création :", e);
-    }
-}
-
-async function saveCurrentNote() {
-    if (!currentNoteId) return;
-
-    const note = await getNote(currentNoteId);
-    if (!note) return;
-
-    note.title = titleInput.value;
-    note.content = contentInput.value;
-    note.updatedAt = Date.now();
-
-    await saveNoteToIDB(note);
-    await renderNotes();
-
-    try {
-        await pushNoteToGit(note, `Mise à jour note: ${note.title || note.id}`);
-    } catch (e) {
-        console.error("Erreur push modification :", e);
-    }
-}
-
-function scheduleAutoSave() {
-    isDirty = true;
-    status.textContent = "Non enregistré";
-    clearTimeout(saveDebounceTimer);
-    saveDebounceTimer = setTimeout(() => {
-        saveCurrentNote();
-    }, 1500);
-}
-
-async function deleteCurrentNote() {
-    if (!currentNoteId) return;
-
-    const note = await getNote(currentNoteId);
-    if (!note) return;
-
-    const label = (note.title && note.title.trim()) || "cette note";
-    if (!confirm(`Supprimer "${label}" ?`)) return;
-
-    const deletedId = currentNoteId;
-    await hardDeleteNoteFromDB(deletedId);
-    closeEditor();
-    await renderNotes();
-
-    try {
-        await deleteNoteFromGit(deletedId, `Suppression de la note ${deletedId}`);
-    } catch (e) {
-        console.error("Erreur suppression Git :", e);
-    }
-}
-
-/* --------------------------------------------------
-   Modale Git & Configuration
--------------------------------------------------- */
-
-async function openGitModal() {
-    const config = await getGitConfig();
-    if (config) {
-        document.getElementById("gitOwner").value = config.owner || "";
-        document.getElementById("gitRepo").value = config.repo || "";
-        document.getElementById("gitFolder").value = config.folder || "notes";
-        document.getElementById("gitToken").value = config.token || "";
-    }
-    gitModal.classList.add("active");
-}
-
-function closeGitModal() {
-    gitModal.classList.remove("active");
-}
-
-openGitConfigBtn.addEventListener("click", openGitModal);
-closeGitModalBtn.addEventListener("click", closeGitModal);
-cancelGitConfigBtn.addEventListener("click", closeGitModal);
-
-gitConfigForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const config = {
-        owner: document.getElementById("gitOwner").value.trim(),
-        repo: document.getElementById("gitRepo").value.trim(),
-        folder: document.getElementById("gitFolder").value.trim(),
-        token: document.getElementById("gitToken").value.trim()
-    };
-    await saveGitConfig(config);
-    closeGitModal();
-    syncNotes(false);
-});
-
-/* --------------------------------------------------
-   Import & Export
--------------------------------------------------- */
-
-function downloadJSON(filename, data) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function exportAllNotes() {
-    const notes = await getAllNotes();
-    downloadJSON(`notes-${new Date().toISOString().slice(0, 10)}.json`, {
-        format: "standalone-notes",
-        exportedAt: new Date().toISOString(),
-        notes
-    });
-}
-
-async function exportCurrentNote() {
-    if (!currentNoteId) return;
-    const note = await getNote(currentNoteId);
-    if (!note) return;
-
-    const filename = ((note.title && note.title.trim()) || "note")
-        .replace(/[^\p{L}\p{N}_-]+/gu, "-")
-        .slice(0, 80);
-
-    downloadJSON(`${filename}.json`, {
-        format: "standalone-notes",
-        exportedAt: new Date().toISOString(),
-        notes: [note]
-    });
-}
-
-document.getElementById("fileInput").addEventListener("change", async event => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    try {
-        const text = await file.text();
-        const data = JSON.parse(text);
-        const listToImport = Array.isArray(data) ? data : (data && Array.isArray(data.notes) ? data.notes : [data]);
-
-        for (const source of listToImport) {
-            if (typeof source !== "object" || !source) continue;
-            const note = {
-                id: generateId(),
-                title: typeof source.title === "string" ? source.title : "",
-                content: typeof source.content === "string" ? source.content : "",
-                createdAt: Date.now(),
-                updatedAt: Date.now()
             };
-            await saveNoteToIDB(note);
-            await pushNoteToGit(note, `Import note: ${note.title || note.id}`);
         }
 
-        await renderNotes();
-        alert("Import terminé avec succès.");
-    } catch (error) {
-        alert("Erreur lors de l'import : " + error.message);
-    } finally {
-        event.target.value = "";
-    }
-});
-
-/* --------------------------------------------------
-   Événements & Initialisation
--------------------------------------------------- */
-
-window.addEventListener("online", () => syncNotes(true));
-document.getElementById("newNote").addEventListener("click", createNote);
-document.getElementById("syncNotes").addEventListener("click", () => syncNotes(false));
-document.getElementById("emptyNewNote").addEventListener("click", createNote);
-document.getElementById("deleteNote").addEventListener("click", deleteCurrentNote);
-document.getElementById("exportAll").addEventListener("click", exportAllNotes);
-document.getElementById("exportCurrent").addEventListener("click", exportCurrentNote);
-
-searchInput.addEventListener("input", renderNotes);
-titleInput.addEventListener("input", scheduleAutoSave);
-contentInput.addEventListener("input", scheduleAutoSave);
-
-document.addEventListener("keydown", event => {
-    const isCmdOrCtrl = event.ctrlKey || event.metaKey;
-    const key = event.key.toLowerCase();
-    if (isCmdOrCtrl && key === "n") { event.preventDefault(); createNote(); }
-    if (isCmdOrCtrl && key === "s") { event.preventDefault(); saveCurrentNote(); }
-});
-
-document.getElementById("backButton").addEventListener("click", () => {
-    document.body.classList.remove("editing");
-});
-
-(async function init() {
-    try {
-        await openDatabase();
-
-        if (navigator.onLine) {
-            await syncNotes(true);
+        function updateLibContent(id, newContent) {
+            const tx = db.transaction([storeName], "readwrite");
+            const store = tx.objectStore(storeName);
+            const request = store.get(id);
+            request.onsuccess = () => {
+                const item = request.result;
+                if (item) {
+                    item.content = newContent;
+                    store.put(item);
+                    tx.oncomplete = () => {
+                        loadLibrary();
+                        propagateContentToPlaced(item);
+                    };
+                }
+            };
         }
 
-        const notes = await getAllNotes();
-        if (notes.length > 0) {
-            await renderNotes();
-            await openNote(notes[0].id);
-        } else {
-            closeEditor();
-            await renderNotes();
+        async function propagateContentToPlaced(item) {
+            const placed = document.querySelectorAll(`.added-element[data-lib-id="${item.id}"]`);
+            if (!placed.length) return;
+            if (item.type === 'code') {
+                const res = await runCodeToImage(item.content, false);
+                if (!res || !res.dataUrl) return;
+                placed.forEach(el => { const img = el.querySelector('img'); if (img) img.src = res.dataUrl; });
+            } else if (item.type === 'image') {
+                placed.forEach(el => { const img = el.querySelector('img'); if (img) img.src = item.content; });
+            } else if (item.type === 'text') {
+                placed.forEach(el => { const c = el.querySelector('.content-text'); if (c) c.innerHTML = item.content; });
+            }
         }
 
-        periodicSyncTimer = setInterval(() => {
-            syncNotes(true);
-        }, SYNC_INTERVAL_MS);
+        function deleteFromLib(id) {
+            const tx = db.transaction([storeName], "readwrite");
+            tx.objectStore(storeName).delete(id);
+            tx.oncomplete = loadLibrary;
+        }
 
-    } catch (error) {
-        console.error("Initialisation échouée :", error);
-    }
-})();
-</script>
+        function loadLibrary() {
+            const tx = db.transaction([storeName], "readonly");
+            const req = tx.objectStore(storeName).getAll();
+            req.onsuccess = () => {
+                const container = document.getElementById('lib-container');
+                container.innerHTML = '';
+                req.result.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'lib-item';
+                    el.draggable = true;
+                    el.ondragstart = (e) => {
+                        e.dataTransfer.effectAllowed = "copy";
+                        e.dataTransfer.setData('application/json', JSON.stringify(item));
+                    };
 
+                    el.addEventListener('dblclick', (e) => {
+                        if (e.target.closest('.lib-title') || e.target.closest('.delete-btn')) return;
+                        editLibContent(item);
+                    });
+
+                    let previewContent = '';
+                    if (item.type === 'text') {
+                        const cleanText = (item.content || '').replace(/<[^>]*>?/gm, '').substring(0, 50);
+                        previewContent = `<span class="lib-text-preview">${escapeHtml(cleanText)}</span>`;
+                    } else if (item.type === 'code') {
+                        const snippet = (item.content || '').replace(/\s+/g, ' ').substring(0, 40);
+                        previewContent = `<span class="lib-code-badge">JS</span><span class="lib-text-preview">${escapeHtml(snippet)}</span>`;
+                    } else {
+                        previewContent = `<img src="${item.content}" class="lib-preview"><span class="lib-text-preview">Image</span>`;
+                    }
+
+                    el.innerHTML = `
+                        <div class="lib-header">
+                            <span class="lib-title" data-id="${item.id}" ondblclick="editLibTitle(event)">${escapeHtml(item.title || 'Sans titre')}</span>
+                            <button class="delete-btn" onclick="deleteFromLib(${item.id})">&times;</button>
+                        </div>
+                        <div class="lib-preview-container" title="Double-cliquez pour modifier">${previewContent}</div>
+                    `;
+                    container.appendChild(el);
+
+                    if (item.type === 'code') {
+                        runCodeToImage(item.content, true).then(res => {
+                            if (res && res.dataUrl) {
+                                const prev = el.querySelector('.lib-preview-container');
+                                if (prev) prev.innerHTML = `<img src="${res.dataUrl}" class="lib-preview"><span class="lib-text-preview">Aperçu (JS)</span>`;
+                            }
+                        });
+                    }
+                });
+            };
+        }
+
+        function editLibTitle(event) {
+            const span = event.target;
+            const itemId = parseInt(span.dataset.id);
+            span.contentEditable = true;
+            span.focus();
+            span.onblur = () => {
+                updateLibTitle(itemId, span.innerText.trim() || 'Sans titre');
+                span.contentEditable = false;
+                span.onblur = null;
+            };
+        }
+
+        function editLibContent(item) {
+            editingItem = { id: item.id, type: item.type, content: item.content };
+            const titleEl = document.getElementById('content-modal-title');
+            const body = document.getElementById('content-modal-body');
+            body.innerHTML = '';
+            if (item.type === 'text') {
+                titleEl.textContent = 'Modifier le texte / HTML';
+                const div = document.createElement('div');
+                div.className = 'modal-editable';
+                div.contentEditable = 'true';
+                div.innerHTML = item.content || '';
+                body.appendChild(div);
+            } else if (item.type === 'code') {
+                titleEl.textContent = 'Modifier le code JS';
+                const ta = document.createElement('textarea');
+                ta.className = 'modal-textarea';
+                ta.value = item.content || '';
+                body.appendChild(ta);
+            } else if (item.type === 'image') {
+                titleEl.textContent = "Remplacer l'image";
+                body.innerHTML = `<img id="modal-img-preview" src="${item.content}" style="max-width:100%; max-height:220px; display:block; margin:0 auto 10px; border:1px solid #ddd;"><button class="secondary" onclick="document.getElementById('modal-img-file').click()">Choisir</button><input type="file" id="modal-img-file" accept="image/*" style="display:none;">`;
+                document.getElementById('modal-img-file').addEventListener('change', function() {
+                    if (this.files.length) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => { editingItem.content = e.target.result; document.getElementById('modal-img-preview').src = e.target.result; };
+                        reader.readAsDataURL(this.files[0]);
+                    }
+                });
+            }
+            document.getElementById('content-modal').classList.add('open');
+        }
+
+        function closeContentModal() {
+            document.getElementById('content-modal').classList.remove('open');
+            editingItem = null;
+        }
+
+        function saveContentModal() {
+            if (!editingItem) return;
+            let newContent = editingItem.type === 'text' ? document.querySelector('.modal-editable').innerHTML.trim() :
+                             editingItem.type === 'code' ? document.querySelector('.modal-textarea').value.trim() : editingItem.content;
+            if (!newContent) return;
+            updateLibContent(editingItem.id, newContent);
+            closeContentModal();
+        }
+
+        function setForceMove(on) {
+            if (ctrlForceMove === on) return;
+            ctrlForceMove = on;
+            document.querySelectorAll('.added-element').forEach(el => interact(el).resizable({ enabled: !on }));
+            document.body.classList.toggle('force-move-mode', on);
+        }
+
+        window.addEventListener('keydown', (e) => { if (e.key === 'Control' || e.ctrlKey) setForceMove(true); });
+        window.addEventListener('keyup', (e) => { if (e.key === 'Control' || !e.ctrlKey) setForceMove(false); });
+
+        function addTextToLib() {
+            const val = document.getElementById('input-text-editable').innerHTML.trim();
+            if (!val) return;
+            saveToLib('text', val, (val.replace(/<[^>]*>?/gm, '').substring(0, 20) || 'Texte'));
+            document.getElementById('input-text-editable').innerHTML = '';
+        }
+
+        function addCodeToLib() {
+            const editable = document.getElementById('input-text-editable');
+            const code = editable.innerText.trim();
+            if (!code) return;
+            saveToLib('code', code, 'Code JS : ' + code.substring(0, 20));
+            editable.innerHTML = '';
+        }
+
+        document.getElementById('image-input').addEventListener('change', function() {
+            if (this.files.length > 0) {
+                const reader = new FileReader();
+                reader.onload = (e) => saveToLib('image', e.target.result, this.files[0].name);
+                reader.readAsDataURL(this.files[0]);
+                this.value = '';
+            }
+        });
+
+        async function runCodeToImage(code, silent = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 300; canvas.height = 150;
+            const ctx = canvas.getContext('2d');
+            try {
+                const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+                const fn = new AsyncFunction('canvas', 'ctx', code);
+                const result = await fn(canvas, ctx);
+                const out = (result instanceof HTMLCanvasElement) ? result : canvas;
+                return { dataUrl: out.toDataURL('image/png'), width: out.width, height: out.height };
+            } catch (err) {
+                if (!silent) alert("Erreur JS : " + err.message);
+                return null;
+            }
+        }
+
+        async function loadPDF(file) {
+            try {
+                originalFileName = file.name || 'document-edite.pdf';
+                const buffer = await file.arrayBuffer();
+                originalPdfBuffer = buffer.slice(0);
+                pdfDocProxy = await pdfjsLib.getDocument(new Uint8Array(buffer)).promise;
+                await renderAllPages();
+                await restoreCollectionForPDF(originalFileName);
+            } catch (err) {
+                alert("Erreur chargement PDF: " + err.message);
+            }
+        }
+
+        async function renderAllPages() {
+            const container = document.getElementById('pages-container');
+            container.innerHTML = '';
+            document.getElementById('empty-state').style.display = 'none';
+            for (let i = 1; i <= pdfDocProxy.numPages; i++) {
+                await renderOnePage(i, container);
+            }
+        }
+
+        async function renderOnePage(pageNum, container) {
+            const page = await pdfDocProxy.getPage(pageNum);
+            const viewport = page.getViewport({ scale: pdfScale });
+            const wrapper = document.createElement('div');
+            wrapper.className = 'page-wrapper';
+            wrapper.style.width = viewport.width + 'px';
+            wrapper.style.height = viewport.height + 'px';
+            wrapper.dataset.pageNum = pageNum;
+            wrapper.pdfViewport = viewport;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const layer = document.createElement('div');
+            layer.className = 'elements-layer';
+
+            wrapper.appendChild(canvas);
+            wrapper.appendChild(layer);
+            container.appendChild(wrapper);
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        }
+
+        function resetWorkspace() {
+            originalPdfBuffer = null;
+            document.getElementById('pages-container').innerHTML = '';
+            document.getElementById('empty-state').style.display = 'block';
+        }
+
+        async function createElementOnPage(parentLayer, item, x, y, options = {}) {
+            let type = item.type;
+            let content = item.content;
+            let naturalW = null, naturalH = null;
+
+            if (type === 'code') {
+                const result = await runCodeToImage(item.content, false);
+                if (!result) return;
+                content = result.dataUrl;
+                naturalW = result.width;
+                naturalH = result.height;
+                type = 'image';
+            }
+
+            const el = document.createElement('div');
+            el.className = 'added-element';
+            
+            const finalX = options.x !== undefined ? options.x : x;
+            const finalY = options.y !== undefined ? options.y : y;
+            const initLeft = options.initLeft !== undefined ? options.initLeft : finalX;
+            const initTop = options.initTop !== undefined ? options.initTop : finalY;
+            const dx = options.dx !== undefined ? options.dx : 0;
+            const dy = options.dy !== undefined ? options.dy : 0;
+
+            el.style.left = initLeft + 'px';
+            el.style.top = initTop + 'px';
+            el.style.transform = `translate(${dx}px, ${dy}px)`;
+            el.dataset.x = dx; 
+            el.dataset.y = dy;
+            el.dataset.initLeft = initLeft;
+            el.dataset.initTop = initTop;
+
+            if (options.width) el.style.width = options.width + 'px';
+            if (options.height) el.style.height = options.height + 'px';
+
+            if (item.id != null) {
+                el.dataset.libId = item.id;
+                el.dataset.libType = item.type;
+            }
+
+            if (!options.width) {
+                el.style.width = (type === 'image' ? 150 : 200) + 'px';
+                el.style.height = (type === 'image' ? 150 : 100) + 'px';
+            }
+
+            if (type === 'image') {
+                el.innerHTML = `<img src="${content}" draggable="false" style="width:100%; height:100%; object-fit: contain;">`;
+            } else {
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'content-text';
+                contentDiv.style.fontSize = '16px';
+                contentDiv.innerHTML = content;
+                el.appendChild(contentDiv);
+            }
+
+            el.innerHTML += `<div class="elem-delete" onpointerdown="event.stopPropagation(); this.parentElement.remove()">×</div>`;
+            parentLayer.appendChild(el);
+            initInteract(el);
+            
+            // Sauvegarde automatique de la collection à chaque manipulation
+            saveCurrentCollection();
+        }
+
+        function initInteract(el) {
+            interact(el)
+                .draggable({
+                    modifiers: [interact.modifiers.restrictRect({ restriction: 'parent', endOnly: true })],
+                    listeners: {
+                        move (event) {
+                            const t = event.target;
+                            const x = (parseFloat(t.dataset.x) || 0) + event.dx;
+                            const y = (parseFloat(t.dataset.y) || 0) + event.dy;
+                            t.style.transform = `translate(${x}px, ${y}px)`;
+                            t.dataset.x = x; t.dataset.y = y;
+                        },
+                        end() { saveCurrentCollection(); }
+                    }
+                })
+                .resizable({
+                    enabled: !ctrlForceMove,
+                    edges: { left: true, right: true, bottom: true, top: true },
+                    listeners: {
+                        move (event) {
+                            let { x, y } = event.target.dataset;
+                            x = (parseFloat(x) || 0) + event.deltaRect.left;
+                            y = (parseFloat(y) || 0) + event.deltaRect.top;
+                            Object.assign(event.target.style, {
+                                width: `${event.rect.width}px`, height: `${event.rect.height}px`,
+                                transform: `translate(${x}px, ${y}px)`
+                            });
+                            Object.assign(event.target.dataset, { x, y });
+                        },
+                        end() { saveCurrentCollection(); }
+                    }
+                });
+        }
+
+        // --- GESTION DES COLLECTIONS PAR NOM DE PDF ---
+        function saveCurrentCollection() {
+            if (!originalFileName) return;
+            const collectionData = [];
+            document.querySelectorAll('.page-wrapper').forEach(wrapper => {
+                const pageNum = wrapper.dataset.pageNum;
+                wrapper.querySelectorAll('.added-element').forEach(el => {
+                    collectionData.push({
+                        pageNum: pageNum,
+                        libId: el.dataset.libId,
+                        libType: el.dataset.libType,
+                        initLeft: parseFloat(el.dataset.initLeft),
+                        initTop: parseFloat(el.dataset.initTop),
+                        dx: parseFloat(el.dataset.x) || 0,
+                        dy: parseFloat(el.dataset.y) || 0,
+                        width: parseFloat(el.style.width),
+                        height: parseFloat(el.style.height)
+                    });
+                });
+            });
+
+            const tx = db.transaction([collectionsStoreName], "readwrite");
+            tx.objectStore(collectionsStoreName).put({ fileName: originalFileName, elements: collectionData });
+        }
+
+        async function restoreCollectionForPDF(fileName) {
+            const tx = db.transaction([collectionsStoreName], "readonly");
+            const req = tx.objectStore(collectionsStoreName).get(fileName);
+            req.onsuccess = async () => {
+                const record = req.result;
+                if (!record || !record.elements) return;
+
+                // Récupérer la bibliothèque pour mapper les IDs aux éléments réels
+                const libTx = db.transaction([storeName], "readonly");
+                const libReq = libTx.objectStore(storeName).getAll();
+                libReq.onsuccess = async () => {
+                    const libMap = new Map();
+                    libReq.result.forEach(item => libMap.set(item.id.toString(), item));
+
+                    for (const elData of record.elements) {
+                        const item = libMap.get(elData.libId);
+                        if (item) {
+                            const pageWrapper = document.querySelector(`.page-wrapper[data-page-num="${elData.pageNum}"]`);
+                            if (pageWrapper) {
+                                const layer = pageWrapper.querySelector('.elements-layer');
+                                await createElementOnPage(layer, item, 0, 0, {
+                                    initLeft: elData.initLeft,
+                                    initTop: elData.initTop,
+                                    dx: elData.dx,
+                                    dy: elData.dy,
+                                    width: elData.width,
+                                    height: elData.height
+                                });
+                            }
+                        }
+                    }
+                };
+            };
+        }
+
+        const mainArea = document.getElementById('main-area');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+            mainArea.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+        });
+        mainArea.addEventListener('dragenter', () => mainArea.classList.add('drag-active'));
+        mainArea.addEventListener('dragleave', () => mainArea.classList.remove('drag-active'));
+
+        mainArea.addEventListener('drop', async (e) => {
+            mainArea.classList.remove('drag-active');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                [...files].forEach(file => {
+                    if (file.type === 'application/pdf') loadPDF(file);
+                });
+                return;
+            }
+
+            if (originalPdfBuffer) {
+                let itemData;
+                try {
+                    itemData = JSON.parse(e.dataTransfer.getData('application/json'));
+                } catch (error) { return; }
+
+                if (itemData) {
+                    const targetEl = document.elementFromPoint(e.clientX, e.clientY);
+                    const pageWrapper = targetEl ? targetEl.closest('.page-wrapper') : null;
+                    if (pageWrapper) {
+                        const layer = pageWrapper.querySelector('.elements-layer');
+                        const rect = layer.getBoundingClientRect();
+                        await createElementOnPage(layer, itemData, e.clientX - rect.left, e.clientY - rect.top);
+                    }
+                }
+            }
+        });
+
+        async function savePDF() {
+            if (!originalPdfBuffer) { alert("Erreur: PDF non chargé."); return; }
+            const btn = document.querySelector('button[onclick="savePDF()"]');
+            btn.innerText = "Traitement..."; btn.disabled = true;
+
+            try {
+                const pdfDoc = await PDFLib.PDFDocument.load(originalPdfBuffer);
+                const pageWrappers = document.querySelectorAll('.page-wrapper');
+
+                for (let wrapper of pageWrappers) {
+                    const pageNum = parseInt(wrapper.dataset.pageNum);
+                    const elements = wrapper.querySelectorAll('.added-element');
+                    if (elements.length === 0) continue;
+
+                    const pdfPage = pdfDoc.getPage(pageNum - 1);
+                    const viewport = wrapper.pdfViewport;
+
+                    const toPdf = (vx, vy) => {
+                        const p = viewport.convertToPdfPoint(vx, vy);
+                        return { x: p[0], y: p[1] };
+                    };
+
+                    for (let el of elements) {
+                        el.querySelector('.elem-delete').style.display = 'none';
+                        const dx = parseFloat(el.dataset.x) || 0;
+                        const dy = parseFloat(el.dataset.y) || 0;
+                        const finalLeft = (parseFloat(el.dataset.initLeft) || 0) + dx;
+                        const finalTop = (parseFloat(el.dataset.initTop) || 0) + dy;
+                        const elRect = el.getBoundingClientRect();
+                        const w = elRect.width, h = elRect.height;
+
+                        const A = toPdf(finalLeft, finalTop);
+                        const C = toPdf(finalLeft + w, finalTop + h);
+                        const D = toPdf(finalLeft, finalTop + h);
+
+                        const boxW = Math.hypot(C.x - D.x, C.y - D.y);
+                        const boxH = Math.hypot(A.x - D.x, A.y - D.y);
+                        const angle = Math.atan2(C.y - D.y, C.x - D.x) * 180 / Math.PI;
+
+                        const contentImg = el.querySelector('img');
+                        if (contentImg && !el.querySelector('.content-text')) {
+                            const imgEl = new Image();
+                            imgEl.src = contentImg.src;
+                            await new Promise(r => imgEl.onload = r);
+                            const iw = imgEl.naturalWidth || 1, ih = imgEl.naturalHeight || 1;
+
+                            const tmp = document.createElement('canvas');
+                            tmp.width = iw; tmp.height = ih;
+                            tmp.getContext('2d').drawImage(imgEl, 0, 0);
+                            const pdfImg = await pdfDoc.embedPng(tmp.toDataURL('image/png'));
+
+                            const fit = Math.min(boxW / iw, boxH / ih);
+                            pdfPage.drawImage(pdfImg, {
+                                x: D.x, y: D.y,
+                                width: iw * fit, height: ih * fit,
+                                rotate: PDFLib.degrees(angle)
+                            });
+                        }
+                        el.querySelector('.elem-delete').style.display = '';
+                    }
+                }
+
+                const pdfBytes = await pdfDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = originalFileName;
+                link.click();
+            } catch (err) {
+                alert("Erreur sauvegarde: " + err.message);
+            } finally {
+                btn.innerText = "💾 Sauvegarder PDF"; btn.disabled = false;
+            }
+        }
+
+        initDB();
+    </script>
 </body>
 </html>
