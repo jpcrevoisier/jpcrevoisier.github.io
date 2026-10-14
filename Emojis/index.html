@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Emojis</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>🍭</text></svg>">
+  <link id="pageIcon" rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>🎮</text></svg>">
   <style>
     body{
       font-family: system-ui, "Noto Color Emoji", "Segoe UI Emoji", sans-serif;
@@ -81,7 +81,8 @@ function showPage(page=0, perpage=10)
 function cpyCls(elm)
 {
 	navigator.clipboard.writeText(elm.innerHTML);
-	document.getElementById('status').innerHTML=('<link rel="icon" href="data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'64\' height=\'64\'><text y=\'50\' font-size=\'50\'>'+elm.innerHTML+'</text></svg>">').replace(/[\u00A0-\u9999<>\&]/g, function(i){return '&#'+i.charCodeAt(0)+';';});
+	document.getElementById('status').innerHTML=('<link id="pageIcon" rel="icon" href="data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'64\' height=\'64\'><text y=\'50\' font-size=\'50\'>'+elm.innerHTML+'</text></svg>">').replace(/[\u00A0-\u9999<>\&]/g, function(i){return '&#'+i.charCodeAt(0)+';';});
+	document.getElementById('pageIcon').href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>"+elm.innerHTML+"</text></svg>";
 	return true;
 }
 let excluded=[];
