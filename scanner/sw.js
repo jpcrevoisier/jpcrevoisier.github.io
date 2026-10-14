@@ -13,7 +13,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().map(keys => {
+    caches.keys().then(keys => { // Correction : .then() ajouté ici
       return Promise.all(
         keys.map(key => {
           if (key !== CACHE_NAME) {
