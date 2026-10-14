@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA QR Scanner</title>
+    <!-- Tailwind CSS pour un design propre et rapide -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Manifest PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- En-tête -->
+    <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-md flex justify-between items-center">
+        <h1 class="text-xl font-bold flex items-center gap-2">
+            📷 <span>QR Scanner PWA</span>
+        </h1>
+        <button id="btnSettings" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm transition">
+            ⚙️ Paramètres
+        </button>
+    </header>
+
+    <!-- Contenu Principal -->
+    <main class="flex-1 flex flex-col items-center justify-center p-4 max-w-md mx-auto w-full">
+        
+        <!-- Zone Caméra / Scanner -->
+        <div class="relative w-full aspect-square bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-700 flex items-center justify-center">
+            <video id="video" class="w-full h-full object-cover" autoplay playsinline muted></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            
+            <!-- Viseur graphique -->
+            <div class="absolute inset-0 border-2 border-blue-500/50 rounded-2xl pointer-events-none flex items-center justify-center">
+                <div class="w-48 h-48 border-2 border-dashed border-blue-400/80 rounded-xl animate-pulse"></div>
+            </div>
+
+            <!-- Message d'état -->
+            <div id="statusMsg" class="absolute bottom-4 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full text-xs text-slate-300">
+                Initialisation de la caméra...
+            </div>
+        </div>
+
+        <!-- Dernier scan détecté -->
+        <div class="mt-4 w-full bg-slate-800 border border-slate-700 p-3 rounded-xl">
+            <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Dernier code détecté :</span>
+            <p id="lastResult" class="text-sm font-mono text-blue-400 truncate mt-1">Aucun</p>
+        </div>
+    </main>
+
+    <!-- Modal des Paramètres (URL cible) -->
+    <div id="modalSettings" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+            <h2 class="text-lg font-bold mb-4">Configuration de l'URL</h2>
+            <label class="block text-xs text-slate-400 mb-1">URL cible du Fetch (le QR code sera ajouté ou transmis)</label>
+            <input type="url" id="targetUrl" placeholder="https://example.com/api/scan" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:border-blue-500 mb-4">
+            <div class="flex justify-end gap-2">
+                <button id="btnCloseSettings" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm transition">Annuler</button>
+                <button id="btnSaveSettings" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold transition">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal d'Affichage de la Réponse HTML -->
+    <div id="modalHtml" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="bg-slate-700/50 p-4 border-b border-slate-700 flex justify-between items-center">
+                <h3 class="font-bold text-sm text-slate-200">Réponse du serveur</h3>
+                <button id="btnCloseHtml" class="text-slate-400 hover:text-slate-100 text-lg font-bold px-2">&times;</button>
+            </div>
+            <div id="htmlContentContainer" class="p-4 overflow-y-auto flex-1 bg-slate-900 text-slate-100">
+                <!-- Le contenu HTML distant sera injecté ici -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Script principal de gestion -->
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const statusMsg = document.getElementById('statusMsg');
+        const lastResult = document.getElementById('lastResult');
+        
+        const modalSettings = document.getElementById('modalSettings');
+        const modalHtml = document.getElementById('modalHtml');
+        const targetUrlInput = document.getElementById('targetUrl');
+
+        let isScanning = true;
+        let lastScannedCode = "";
+        let scanCooldown = false;
+
+        // Charger l'URL enregistrée
+        targetUrlInput.value = localStorage.getItem('target_url') || '';
+
+        // Gestion des Modales
+        document.getElementById('btnSettings').addEventListener('click', () => modalSettings.classList.remove('hidden'));
+        document.getElementById('btnCloseSettings').addEventListener('click', () => modalSettings.classList.add('hidden'));
+        document.getElementById('btnSaveSettings').addEventListener('click', () => {
+            localStorage.setItem('target_url', targetUrlInput.value.trim());
+            modalSettings.classList.add('hidden');
+        });
+        document.getElementById('btnCloseHtml').addEventListener('click', () => {
+            modalHtml.classList.add('hidden');
+            isScanning =chercheRepriseScan();
+        });
+
+        function chercheRepriseScan() {
+            setTimeout(() => { scanCooldown = false; }, 2000); // Anti-spam 2 secondes
+            return true;
+        }
+
+        // Démarrage de la caméra
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                video.srcObject = stream;
+                video.setAttribute('playsinline', true);
+                await video.play();
+                statusMsg.textContent = "Scanner actif";
+                requestAnimationFrame(tick);
+            } catch (err) {
+                console.error(err);
+                statusMsg.textContent = "Erreur d'accès à la caméra";
+            }
+        }
+
+        // Boucle de lecture vidéo et détection de QR Code
+        const canvasElement = canvas.getContext('2d', { willReadFrequently: true });
+
+        async function tick() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA && isScanning) {
+                canvas.height = video.videoHeight;
+                canvas.width = video.videoWidth;
+                canvasElement.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                let codeValue = null;
+
+                // Utilisation de l'API native BarcodeDetector si supportée
+                if ('BarcodeDetector' in window) {
+                    try {
+                        const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+                        const barcodes = await barcodeDetector.detect(canvas);
+                        if (barcodes.length > 0) {
+                            codeValue = barcodes[0].rawValue;
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    }
+                }
+
+                if (codeValue && !scanCooldown) {
+                    handleScannedCode(codeValue);
+                }
+            }
+            requestAnimationFrame(tick);
+        }
+
+        // Traitement du QR Code détecté
+        async function handleScannedCode(code) {
+            scanCooldown = true;
+            lastScannedCode = code;
+            lastResult.textContent = code;
+
+            const url = localStorage.getItem('target_url');
+            if (!url) {
+                alert("Veuillez configurer l'URL cible dans les paramètres.");
+                modalSettings.classList.remove('hidden');
+                return;
+            }
+
+            statusMsg.textContent = "Envoi au serveur...";
+
+            try {
+                // Envoi du QR code en paramètre GET (ou POST selon vos besoins)
+                // Ici on envoie en paramètre ?code=...
+                const separator = url.includes('?') ? '&' : '?';
+                const fullUrl = `${url}${separator}code=${encodeURIComponent(code)}`;
+
+                const response = await fetch(fullUrl, {
+                    method: 'GET', // Modifiable en POST si besoin
+                    headers: { 'Accept': 'text/html, application/xhtml+xml, application/json' }
+                });
+
+                const textResponse = await response.text();
+                
+                // Vérifier si la réponse contient du HTML
+                if (textResponse.trim().toLowerCase().startsWith('<!doctype') || textResponse.includes('<html') || textResponse.includes('<div')) {
+                    isScanning = false; // Pause du scanner pendant l'affichage modale
+                    document.getElementById('htmlContentContainer').innerHTML = textResponse;
+                    modalHtml.classList.remove('hidden');
+                } else {
+                    statusMsg.textContent = "QR Code traité (Réponse non-HTML)";
+                    setTimeout(() => { scanCooldown = false; }, 2000);
+                }
+            } catch (err) {
+                console.error(err);
+                statusMsg.textContent = "Erreur réseau / fetch";
+                setTimeout(() => { scanCooldown = false; }, 2000);
+            }
+        }
+
+        // Lancement au chargement
+        window.addEventListener('load', () => {
+            startCamera();
+            // Enregistrement du Service Worker pour la PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW error:', err));
+            }
+        });
+    </script>
+</body>
+</html>
