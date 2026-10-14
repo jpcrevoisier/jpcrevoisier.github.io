@@ -6,6 +6,8 @@
     <title>PWA QR Scanner</title>
     <!-- Tailwind CSS pour un design propre et rapide -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Importation de jsQR pour le fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <!-- Manifest PWA -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#3b82f6">
@@ -89,6 +91,12 @@
         let lastScannedCode = "";
         let scanCooldown = false;
 
+        // Vérification du support natif au démarrage
+        const hasNativeBarcodeDetector = 'BarcodeDetector' in window;
+        if (!hasNativeBarcodeDetector) {
+            console.log("BarcodeDetector non supporté, utilisation du fallback jsQR.");
+        }
+
         // Charger l'URL enregistrée
         targetUrlInput.value = localStorage.getItem('target_url') || '';
 
@@ -101,7 +109,7 @@
         });
         document.getElementById('btnCloseHtml').addEventListener('click', () => {
             modalHtml.classList.add('hidden');
-            isScanning =chercheRepriseScan();
+            isScanning = chercheRepriseScan();
         });
 
         function chercheRepriseScan() {
@@ -137,13 +145,26 @@
                 
                 let codeValue = null;
 
-                // Utilisation de l'API native BarcodeDetector si supportée
-                if ('BarcodeDetector' in window) {
+                if (hasNativeBarcodeDetector) {
+                    // 1. Utilisation de l'API native BarcodeDetector si supportée
                     try {
                         const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
                         const barcodes = await barcodeDetector.detect(canvas);
                         if (barcodes.length > 0) {
                             codeValue = barcodes[0].rawValue;
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    }
+                } else {
+                    // 2. Fallback avec jsQR si l'API native est absente
+                    try {
+                        const imageData = canvasElement.getImageData(0, 0, canvas.width, canvas.height);
+                        const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: "dontInvert",
+                        });
+                        if (qrCode) {
+                            codeValue = qrCode.data;
                         }
                     } catch (e) {
                         console.error(e);
@@ -173,13 +194,11 @@
             statusMsg.textContent = "Envoi au serveur...";
 
             try {
-                // Envoi du QR code en paramètre GET (ou POST selon vos besoins)
-                // Ici on envoie en paramètre ?code=...
                 const separator = url.includes('?') ? '&' : '?';
                 const fullUrl = `${url}${separator}code=${encodeURIComponent(code)}`;
 
                 const response = await fetch(fullUrl, {
-                    method: 'GET', // Modifiable en POST si besoin
+                    method: 'GET',
                     headers: { 'Accept': 'text/html, application/xhtml+xml, application/json' }
                 });
 
