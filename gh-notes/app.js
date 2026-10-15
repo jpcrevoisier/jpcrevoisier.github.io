@@ -39,7 +39,8 @@ function utf8ToB64(str) {
 
 // ---------- API GitHub ----------
 async function gh(url, opts = {}) {
-  const r = await fetch('https://api.github.com/repos/' + cfg.repo + url, {
+  const full = 'https://api.github.com/repos/' + cfg.repo + url;
+  const r = await fetch(full, {
     ...opts,
     headers: {
       Accept: 'application/vnd.github+json',
@@ -51,13 +52,16 @@ async function gh(url, opts = {}) {
   if (!r.ok) {
     let m = '';
     try { m = (await r.json()).message; } catch (_) {}
-    const e = new Error(m || r.statusText);
+    // Message plus explicite : code HTTP + chemin appelé
+    const hint = r.status === 404
+      ? ' (dépôt, branche ou droits du token ? appel : /repos/' + cfg.repo + url + ')'
+      : '';
+    const e = new Error((m || r.statusText) + hint);
     e.status = r.status;
     throw e;
   }
   return r.json();
 }
-
 // ---------- Chargement de l'arborescence ----------
 async function loadTree() {
   if (!cfg.repo || !cfg.token) { openSettings(); return; }
