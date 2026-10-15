@@ -1,0 +1,80 @@
+﻿/* Thème clair / sombre automatique */
+:root {
+  --bg: #ffffff; --bg2: #f3f4f6; --fg: #1f2328; --muted: #6b7280;
+  --border: #d9dce1; --accent: #2563eb; --ok: #15803d; --err: #b91c1c; --warn: #b45309;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e2e; --bg2: #181825; --fg: #e6e6ef; --muted: #9399b2;
+    --border: #35364a; --accent: #7aa2f7; --ok: #7fd88f; --err: #f38ba8; --warn: #f9c97c;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, input { font: inherit; color: inherit; }
+button { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+input { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%; }
+
+#app { display: grid; grid-template-columns: 300px 1fr; height: 100dvh; }
+
+/* Barre latérale */
+#sidebar { background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; min-width: 0; }
+.side-head { display: flex; align-items: center; justify-content: space-between; padding: 10px; gap: 6px; }
+.side-head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actions { display: flex; gap: 4px; }
+.actions button { padding: 2px 8px; }
+#filter { margin: 0 10px 8px; width: calc(100% - 20px); }
+#tree { flex: 1; overflow: auto; padding: 0 6px 12px; }
+#tree ul { list-style: none; margin: 0; padding-left: 14px; }
+#tree > ul { padding-left: 0; }
+#tree summary { cursor: pointer; padding: 2px 6px; border-radius: 4px; user-select: none; }
+#tree summary:hover, #tree .file:hover { background: var(--border); }
+#tree .file { padding: 2px 6px; border-radius: 4px; cursor: pointer; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+#tree .file.active { background: var(--accent); color: #fff; }
+.empty { color: var(--muted); padding: 10px; }
+
+/* Panneau principal */
+#main { display: flex; flex-direction: column; min-width: 0; height: 100dvh; }
+.bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-bottom: 1px solid var(--border); background: var(--bg2); }
+#fileTitle { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#status { color: var(--muted); font-size: 12px; white-space: nowrap; }
+#status.ok { color: var(--ok); } #status.err { color: var(--err); } #status.warn { color: var(--warn); }
+#btnMenu { display: none; }
+#panes { flex: 1; min-height: 0; position: relative; }
+#editor { width: 100%; height: 100%; border: 0; outline: 0; resize: none; padding: 16px;
+  background: var(--bg); color: var(--fg); tab-size: 2;
+  font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+#preview { height: 100%; overflow: auto; padding: 16px 24px; max-width: 860px; }
+#preview[hidden] { display: none; }
+#preview pre { background: var(--bg2); padding: 10px; border-radius: 6px; overflow: auto; }
+#preview code { background: var(--bg2); padding: 1px 4px; border-radius: 4px; }
+#preview pre code { padding: 0; background: none; }
+#preview blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
+#preview a { color: var(--accent); }
+
+/* Boîte de dialogue */
+dialog { border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--fg);
+  width: min(460px, 92vw); padding: 16px; }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+dialog h3 { margin-top: 0; }
+dialog label { display: block; margin: 10px 0; font-size: 12px; color: var(--muted); }
+dialog label input { margin-top: 4px; color: var(--fg); }
+.row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+/* Mobile : barre latérale en tiroir */
+@media (max-width: 720px) {
+  #app { grid-template-columns: 1fr; }
+  #sidebar { position: fixed; inset: 0 auto 0 0; width: 86vw; max-width: 340px; z-index: 10;
+    transform: translateX(-100%); transition: transform .2s; }
+  #sidebar.open { transform: none; box-shadow: 0 0 30px rgba(0,0,0,.4); }
+  #btnMenu { display: inline-block; }
+}
+

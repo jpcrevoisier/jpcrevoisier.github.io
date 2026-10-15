@@ -1,0 +1,70 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GH Notes</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Barre latérale : arborescence des fichiers -->
+    <aside id="sidebar">
+      <div class="side-head">
+        <strong id="repoName">GH Notes</strong>
+        <div class="actions">
+          <button id="btnNew" title="Nouvelle note">＋</button>
+          <button id="btnRefresh" title="Recharger l'arborescence">⟳</button>
+          <button id="btnSettings" title="Paramètres">⚙</button>
+        </div>
+      </div>
+      <input id="filter" type="search" placeholder="Filtrer les notes…">
+      <nav id="tree"></nav>
+    </aside>
+
+    <!-- Panneau d'édition -->
+    <main id="main">
+      <header class="bar">
+        <button id="btnMenu" title="Menu">☰</button>
+        <span id="fileTitle">Aucune note ouverte</span>
+        <span id="status"></span>
+        <button id="btnPreview" title="Basculer édition / aperçu">Aperçu</button>
+        <button id="btnSave" class="primary" disabled title="Ctrl+S">Enregistrer</button>
+      </header>
+      <div id="panes">
+        <textarea id="editor" disabled spellcheck="false" placeholder="Sélectionnez une note dans la barre de gauche…"></textarea>
+        <div id="preview" hidden></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Paramètres -->
+  <dialog id="dlgSettings">
+    <form id="formSettings">
+      <h3>Paramètres GitHub</h3>
+      <label>Dépôt (propriétaire/nom)
+        <input id="setRepo" placeholder="monuser/mes-notes" required>
+      </label>
+      <label>Branche (vide = branche par défaut)
+        <input id="setBranch" placeholder="main">
+      </label>
+      <label>Token d'accès (fine-grained, Contents : Read and write)
+        <input id="setToken" type="password" autocomplete="off" required>
+      </label>
+      <label>Message de commit ({path} = chemin du fichier)
+        <input id="setMsg" placeholder="Mise à jour de {path}">
+      </label>
+      <div class="row">
+        <button type="button" id="btnCancel">Annuler</button>
+        <button type="submit" class="primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
