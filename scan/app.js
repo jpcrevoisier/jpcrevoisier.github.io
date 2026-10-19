@@ -36,7 +36,6 @@ class ScannerApp {
         this.copyUrlBtn.addEventListener('click', () => this.copyUrl());
         this.clearBtn.addEventListener('click', () => this.clearLastCode());
 
-        // Fermer les modals en cliquant à l'extérieur
         window.addEventListener('click', (e) => {
             if (e.target === this.settingsModal) {
                 this.closeSettingsModal();
@@ -78,15 +77,10 @@ class ScannerApp {
     }
 
     onScanSuccess(decodedText) {
-        // Vérifier si le code est différent du précédent
         if (decodedText !== this.lastScannedCode) {
             this.lastScannedCode = decodedText;
-            
-            // Afficher le dernier code scanné
             this.lastCodeDisplay.textContent = 'Dernier code: ' + decodedText;
             this.lastCodeDisplay.classList.add('active');
-
-            // Ouvrir la modal avec l'URL
             this.showScanModal(decodedText);
         }
     }
@@ -122,7 +116,6 @@ class ScannerApp {
         localStorage.setItem('destinationUrl', this.destinationUrl);
         this.closeSettingsModal();
         
-        // Feedback visuel
         this.statusDisplay.textContent = 'Paramètres enregistrés';
         setTimeout(() => {
             this.statusDisplay.textContent = 'Scanner actif - Pointez vers un code';
@@ -135,7 +128,7 @@ class ScannerApp {
 
     openUrl() {
         const url = this.destinationLink.href;
-        if (url && url !== '#') {
+        if (url && url !== '#' && url !== 'Aucune URL configurée') {
             window.open(url, '_blank');
             this.closeScanModal();
         }
@@ -143,14 +136,16 @@ class ScannerApp {
 
     copyUrl() {
         const url = this.destinationLink.textContent;
-        navigator.clipboard.writeText(url).then(() => {
-            this.copyUrlBtn.textContent = 'Copié !';
-            setTimeout(() => {
-                this.copyUrlBtn.textContent = 'Copier l\'URL';
-            }, 2000);
-        }).catch(err => {
-            console.error('Erreur de copie:', err);
-        });
+        if (url && url !== 'Aucune URL configurée') {
+            navigator.clipboard.writeText(url).then(() => {
+                this.copyUrlBtn.textContent = 'Copié !';
+                setTimeout(() => {
+                    this.copyUrlBtn.textContent = 'Copier l\'URL';
+                }, 2000);
+            }).catch(err => {
+                console.error('Erreur de copie:', err);
+            });
+        }
     }
 
     clearLastCode() {
@@ -163,14 +158,12 @@ class ScannerApp {
     }
 }
 
-// Initialiser l'application quand le DOM est chargé
 document.addEventListener('DOMContentLoaded', () => {
     new ScannerApp();
 });
 
-// Enregistrer le service worker
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('Service Worker enregistré'))
+    navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('Service Worker enregistré avec succès'))
         .catch(err => console.error('Erreur Service Worker:', err));
 }

@@ -1,10 +1,10 @@
-const CACHE_NAME = 'scanner-v1';
+const CACHE_NAME = 'scanner-v2';
 const urlsToCache = [
-    '/',
-    '/index.html',
-    '/styles.css',
-    '/app.js',
-    '/manifest.json',
+    './',
+    './index.html',
+    './styles.css',
+    './app.js',
+    './manifest.json',
     'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
 ];
 
@@ -13,6 +13,7 @@ self.addEventListener('install', event => {
         caches.open(CACHE_NAME)
             .then(cache => cache.addAll(urlsToCache))
     );
+    self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {
@@ -32,6 +33,6 @@ self.addEventListener('activate', event => {
                     }
                 })
             );
-        })
+        }).then(() => self.clients.claim())
     );
 });
