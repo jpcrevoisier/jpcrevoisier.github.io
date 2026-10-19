@@ -1,6 +1,6 @@
 Quelques fichiers html autonomes pour des petits usages / besoins ...
 
- - [🛡️totp ](https://jpcrevoisier.github.io/totp/)
+ - [🛡️ totp ](https://jpcrevoisier.github.io/totp/)
  - [☢ QRcode ](https://jpcrevoisier.github.io/qrcode/)
  - [♻ FullScreen ](https://jpcrevoisier.github.io/fullscreen/)
  - [🔥 CodeMirror ](https://jpcrevoisier.github.io/codemirror/)
@@ -9,6 +9,9 @@ Quelques fichiers html autonomes pour des petits usages / besoins ...
  - [🎁 Emojis ](https://jpcrevoisier.github.io/Emojis/)
  - [📝 PDFedit ](https://jpcrevoisier.github.io/pdfedit/)
  - [🎮 Temp ](https://jpcrevoisier.github.io/temp/)
+ - [📝 GH-Notes ](https://jpcrevoisier.github.io/gh-notes/)
+ - [☳ Scanner](https://jpcrevoisier.github.io/scanner/)
+ 
 
 Le push depuis windows ... 
 ```
