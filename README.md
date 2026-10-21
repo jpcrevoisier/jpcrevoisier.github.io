@@ -12,6 +12,7 @@ Quelques fichiers html autonomes pour des petits usages / besoins ...
  - [📝 GH-Notes ](https://jpcrevoisier.github.io/gh-notes/)
  - [☳ Scanner](https://jpcrevoisier.github.io/scanner/)
  - [☳ Scan](https://jpcrevoisier.github.io/scan/)
+ - [🕵 Laya](https://jpcrevoisier.github.io/laya/)
  
 
 Le push depuis windows ... 
