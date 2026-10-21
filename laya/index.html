@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workflow documents · Laya</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Workflow documents <span class="muted">· Laya</span></h1>
+  <div class="topbar-group">
+    <span id="gpuBadge" class="badge">WebGPU : test en cours…</span>
+    <input id="modelId" type="text" list="modelList" value="onnx-community/Qwen2.5-1.5B-Instruct"
+           title="Identifiant Hugging Face d'un modèle de génération de texte au format ONNX">
+    <datalist id="modelList">
+      <option value="onnx-community/Qwen2.5-1.5B-Instruct"></option>
+      <option value="onnx-community/Qwen2.5-0.5B-Instruct"></option>
+      <option value="HuggingFaceTB/SmolLM2-1.7B-Instruct"></option>
+    </datalist>
+    <button id="btnLoad">Charger le modèle</button>
+    <button id="btnClearCache" class="ghost" title="Supprime les modèles stockés dans l'IndexedDB">Vider le cache</button>
+    <span id="storageInfo" class="muted"></span>
+  </div>
+  <div class="progress-wrap">
+    <div id="progressBar" class="progress"></div>
+    <span id="progressText" class="progress-text">Modèle non chargé</span>
+  </div>
+</header>
+
+<main class="layout">
+
+  <section class="panel editor-panel">
+    <div class="toolbar">
+      <button id="btnAddNode">+ Nœud</button>
+      <button id="btnExample" class="ghost">Exemple</button>
+      <button id="btnExport" class="ghost">Exporter</button>
+      <button id="btnImport" class="ghost">Importer</button>
+      <input id="fileImport" type="file" accept="application/json" hidden>
+      <span class="muted hint">Glisser un nœud pour le déplacer · tirer depuis le point de droite vers un autre nœud pour les relier · clic sur un lien pour lui donner une étiquette</span>
+    </div>
+    <div id="canvasScroll" class="canvas-scroll">
+      <div id="world" class="world">
+        <svg id="edges" class="edges" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z"></path>
+            </marker>
+          </defs>
+          <g id="edgeLayer"></g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <aside id="inspector" class="panel inspector"></aside>
+
+  <section class="panel run-panel">
+    <div id="drop" class="drop" tabindex="0">Déposer des PDF (ou TXT) ici, ou cliquer pour choisir des fichiers</div>
+    <input id="fileInput" type="file" multiple accept=".pdf,.txt,.md,.csv,.json,application/pdf,text/plain" hidden>
+    <div class="run-actions">
+      <button id="btnStop" class="danger" disabled>Arrêter</button>
+      <span id="live" class="live"></span>
+    </div>
+    <div id="results" class="results"></div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
