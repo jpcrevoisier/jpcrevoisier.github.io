@@ -11,8 +11,9 @@ Quelques fichiers html autonomes pour des petits usages / besoins ...
  - [🎮 Temp ](https://jpcrevoisier.github.io/temp/)
  - [📝 GH-Notes ](https://jpcrevoisier.github.io/gh-notes/)
  - [☳ Scanner](https://jpcrevoisier.github.io/scanner/)
- - [☳ Scan](https://jpcrevoisier.github.io/scan/)
- - [🕵 Laya](https://jpcrevoisier.github.io/laya/)
+ - [☳ Scan ](https://jpcrevoisier.github.io/scan/)
+ - [🕵 Laya ](https://jpcrevoisier.github.io/laya/)
+ - [🕵 KolibriOS ](https://jpcrevoisier.github.io/kolibrios/)
  
 
 Le push depuis windows ... 
