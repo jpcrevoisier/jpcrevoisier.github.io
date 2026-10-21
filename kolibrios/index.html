@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>KolibriOS Web</title>
+    <script src="libv86.js"></script>
+</head>
+<body>
+    <!-- L'écran d'affichage VESA / VGA de KolibriOS -->
+    <div id="screen_container" style="white-space: pre; font-family: monospace; cursor: pointer;">
+        <div style="position: relative;"></div>
+        <canvas style="display: none"></canvas>
+    </div>
+
+    <script>
+        window.onload = function() {
+            var emulator = new V86Starter({
+                wasm_path: "v86.wasm",
+                memory_size: 64 * 1024 * 1024, // 64 Mo suffisent largement (KolibriOS tourne dès 8 Mo)
+                vga_memory_size: 8 * 1024 * 1024,
+                screen_container: document.getElementById("screen_container"),
+                bios: { url: "bios/seabios.bin" },
+                vga_bios: { url: "bios/vgabios.bin" },
+                fda: { url: "kolibri.img" }, // L'image Floppy de KolibriOS
+                autostart: true,
+            });
+        };
+    </script>
+</body>
+</html>
