@@ -493,9 +493,14 @@ async function ensureTjs() {
   if (laya.tjs) return laya.tjs;
   const tjs = await import(TRANSFORMERS_URL);
   tjs.env.allowLocalModels = false;
-  tjs.env.useBrowserCache = false;
-  tjs.env.customCache = idbCache;
-  tjs.env.useCustomCache = true;
+  const urlParams = new URLSearchParams(location.search);
+  if (urlParams.get('cache') === 'browser') {
+    tjs.env.useBrowserCache = true;      // cache natif du navigateur (test)
+  } else {
+    tjs.env.useBrowserCache = false;
+    tjs.env.customCache = idbCache;      // cache IndexedDB
+    tjs.env.useCustomCache = true;
+  }
   laya.tjs = tjs;
   return tjs;
 }
@@ -542,7 +547,7 @@ async function loadModel() {
     };
     const generator = await tjs.pipeline('text-generation', id, {
       device: 'webgpu',
-      dtype: gpu.f16 ? 'q4f16' : 'q4',
+      dtype: new URLSearchParams(location.search).get('dtype') || (gpu.f16 ? 'q4f16' : 'q4'),
       progress_callback: onProgress
     });
     laya.generator = generator;
