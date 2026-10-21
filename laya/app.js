@@ -520,7 +520,12 @@ function setProgress(ratio, text, isError) {
 function setLive(text) {
   $('#live').textContent = text ? 'Laya : ' + text.slice(-180).replace(/\s+/g, ' ') : '';
 }
-
+function describeError(e) {
+  if (e instanceof Error) return e.message || e.name;
+  if (typeof e === 'number') return 'exception native ONNX Runtime (code ' + e + ')';
+  if (typeof e === 'string') return e;
+  try { return JSON.stringify(e); } catch (x) { return String(e); }
+}
 async function loadModel() {
   const id = $('#modelId').value.trim();
   if (!id) throw new Error('Identifiant de modèle vide');
@@ -565,9 +570,10 @@ async function loadModel() {
   try {
     return await laya.loading;
   } catch (e) {
-    setProgress(0, 'Erreur : ' + e.message, true);
-    throw e;
-  } finally {
+	console.error('Erreur au chargement du modèle :', e);
+	setProgress(0, 'Erreur : ' + describeError(e), true);
+	throw e;
+  }} finally {
     laya.loading = null;
   }
 }
