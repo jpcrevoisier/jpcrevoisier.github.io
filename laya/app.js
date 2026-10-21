@@ -502,6 +502,10 @@ async function ensureTjs() {
     tjs.env.useCustomCache = true;
   }
   laya.tjs = tjs;
+  try {
+    tjs.env.backends.onnx.logLevel = 'verbose';
+    tjs.env.backends.onnx.debug = true;
+  } catch (e) { /* ignoré */ }
   return tjs;
 }
 
