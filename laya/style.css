@@ -1,4 +1,3 @@
-
 /* ===== Thème ===== */
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7385; --border: #d9dde6;
@@ -20,22 +19,26 @@ button { font: inherit; padding: 5px 10px; border: 1px solid var(--accent); back
 button.ghost { background: transparent; color: var(--accent); }
 button.danger { background: var(--bad); border-color: var(--bad); }
 button:disabled { opacity: .45; cursor: not-allowed; }
-input[type=text], textarea { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; width: 100%; }
+input[type=text], textarea, select { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+input[type=text], textarea { width: 100%; }
 .muted { color: var(--muted); }
 
 /* ===== Barre du haut ===== */
 .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--border); }
 .topbar-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.options label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+.options select { padding: 3px 6px; }
+.options label.chk { cursor: pointer; }
 #modelId { width: 330px; }
 .badge { padding: 3px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); }
 .badge.ok { color: var(--ok); border-color: var(--ok); }
 .badge.ko { color: var(--bad); border-color: var(--bad); }
-.progress-wrap { position: relative; flex: 1; min-width: 240px; height: 24px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--code); }
+.progress-wrap { position: relative; flex: 1 1 100%; min-width: 240px; height: 24px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--code); }
 .progress { height: 100%; width: 0; background: var(--accent); opacity: .35; transition: width .2s; }
 .progress.indet { width: 35%; animation: slide 1.2s infinite linear; }
 .progress.err { width: 100%; background: var(--bad); }
 @keyframes slide { from { margin-left: -35%; } to { margin-left: 100%; } }
-.progress-text { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 8px; font-size: 12px; }
+.progress-text { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 8px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===== Mise en page ===== */
 .layout { display: grid; grid-template-columns: 1fr 380px; grid-template-rows: minmax(320px, 52vh) auto; gap: 12px; padding: 12px; }
@@ -97,4 +100,3 @@ pre { margin: 4px 0; padding: 8px; background: var(--code); border-radius: 6px; 
 .lbl { margin-top: 6px; font-size: 11px; color: var(--muted); text-transform: uppercase; }
 .err { color: var(--bad); margin: 4px 0; }
 .tag { margin-left: 6px; padding: 0 6px; font-size: 12px; background: var(--code); border-radius: 4px; }
-

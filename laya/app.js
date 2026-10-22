@@ -1,4 +1,3 @@
-
 // ============================================================================
 // Workflow de nœuds + Laya (modèle ONNX exécuté dans la page via Transformers.js
 // / ONNX Runtime Web en WebGPU). Aucune dépendance locale : tout est chargé
@@ -11,6 +10,8 @@ const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers
 const PDFJS_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
 const PDFJS_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
 const STORAGE_KEY = 'workflow-laya-v1';
+const SETTINGS_KEY = 'workflow-laya-reglages-v1';
+const FAILED_KEY = 'workflow-laya-echecs-v1';
 const IDB_NAME = 'laya-modeles';
 const IDB_STORE = 'fichiers';
 const NODE_W = 180;
@@ -19,6 +20,7 @@ const MAX_STEPS = 200;
 const SVGNS = 'http://www.w3.org/2000/svg';
 const FENCE = '\u0060\u0060\u0060'; // trois accents graves (évite de les écrire en dur)
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+const ABORT_HINT = 'Le moteur ONNX Runtime a planté : recharge la page (F5) avant de réessayer.';
 const $ = (s) => document.querySelector(s);
 
 /* ============================== Utilitaires =============================== */
@@ -53,6 +55,16 @@ function safeJson(v, max = 1500) {
 function showValue(v) { return typeof v === 'string' ? v : safeJson(v); }
 const fmtMo = (b) => (b / 1048576).toFixed(0);
 const fmtMs = (ms) => (ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s');
+
+// Rend lisible n'importe quelle valeur levée (ONNX Runtime lève parfois un nombre ou une chaîne)
+function describeError(e) {
+  if (e instanceof Error) return e.message || e.name || 'Error';
+  if (typeof e === 'number') return 'exception native ONNX Runtime (code ' + e + ')';
+  if (typeof e === 'string') return e;
+  if (e === undefined || e === null) return 'erreur sans détail';
+  try { return JSON.stringify(e); } catch (x) { return String(e); }
+}
+function isAbort(e) { return typeof e === 'number' || /abort/i.test(describeError(e)); }
 
 /* ============================ État du workflow ============================ */
 let state = { nodes: [], edges: [] };
@@ -276,7 +288,7 @@ function deleteEdge(id) {
 }
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Delete' || !selected) return;
-  if (/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if (selected.type === 'node') deleteNode(selected.id); else deleteEdge(selected.id);
 });
 
@@ -417,8 +429,56 @@ $('#fileImport').onchange = async (ev) => {
     selected = null;
     save();
     renderAll();
-  } catch (err) { alert('Import impossible : ' + err.message); }
+  } catch (err) { alert('Import impossible : ' + describeError(err)); }
 };
+
+/* ======================= Réglages du moteur (barre du haut) =============== */
+const ui = {
+  get model() { return $('#modelId').value.trim(); },
+  get engine() { return $('#engine').value; },
+  get dtype() { return $('#dtype').value; },
+  get cache() { return $('#cacheMode').value; },
+  get verbose() { return $('#verbose').checked; }
+};
+
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      model: $('#modelId').value, engine: ui.engine, dtype: ui.dtype, cache: ui.cache, verbose: ui.verbose
+    }));
+  } catch (e) { /* ignoré */ }
+}
+function restoreSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
+    if (!s) return;
+    if (s.model) $('#modelId').value = s.model;
+    if (s.engine) $('#engine').value = s.engine;
+    if (s.dtype) $('#dtype').value = s.dtype;
+    if (s.cache) $('#cacheMode').value = s.cache;
+    $('#verbose').checked = !!s.verbose;
+  } catch (e) { /* ignoré */ }
+}
+['#modelId', '#engine', '#dtype', '#cacheMode', '#verbose'].forEach((sel) => {
+  $(sel).addEventListener('change', saveSettings);
+});
+
+// Mémorise (pour la durée de l'onglet) les formats qui ont fait planter ONNX Runtime
+function readFailed() { try { return JSON.parse(sessionStorage.getItem(FAILED_KEY) || '{}'); } catch (e) { return {}; } }
+function recordFailure(model, engine, dtype) {
+  try {
+    const all = readFailed();
+    const k = model + '|' + engine;
+    all[k] = (all[k] || []).concat(dtype).filter((v, i, a) => a.indexOf(v) === i);
+    sessionStorage.setItem(FAILED_KEY, JSON.stringify(all));
+  } catch (e) { /* ignoré */ }
+}
+function pickDtype(model, engine, gpu) {
+  if (ui.dtype !== 'auto') return ui.dtype;
+  const cands = engine === 'wasm' ? ['q4', 'q8'] : (gpu && gpu.f16 ? ['q4f16', 'q4', 'q8'] : ['q4', 'q8']);
+  const failed = readFailed()[model + '|' + engine] || [];
+  return cands.find((d) => !failed.includes(d)) || cands[0];
+}
 
 /* =========================== Cache IndexedDB ============================== */
 let idbPromise = null;
@@ -454,8 +514,9 @@ const idbCache = {
   async put(request, response) {
     const key = typeof request === 'string' ? request : request.url;
     const headers = {};
-    response.headers.forEach((v, k) => { if (k !== 'content-encoding') headers[k] = v; });
+    response.headers.forEach((v, k) => { if (k !== 'content-encoding' && k !== 'content-length') headers[k] = v; });
     const blob = await response.blob();
+    headers['content-length'] = String(blob.size);
     await idbTx('readwrite', (s) => s.put({ blob, headers }, key));
   }
 };
@@ -467,7 +528,10 @@ async function refreshStorage() {
 }
 
 /* ========================= Laya : modèle en WebGPU ======================== */
-const laya = { tjs: null, generator: null, loadedId: null, loading: null, loadingId: null, stop: null, queue: Promise.resolve(), gpu: null };
+const laya = {
+  tjs: null, generator: null, loadedKey: null, loading: null, loadingKey: null,
+  stop: null, queue: Promise.resolve(), gpu: null, aborted: false
+};
 const runCtl = { cancel: false };
 
 async function testWebGPU() {
@@ -485,28 +549,30 @@ async function testWebGPU() {
     } catch (e) { /* ignoré */ }
     return { ok: true, f16, msg: 'WebGPU disponible' + (desc ? ' (' + desc + ')' : '') + (f16 ? ' · f16' : ' · sans f16') };
   } catch (e) {
-    return { ok: false, msg: 'Échec WebGPU : ' + e.message };
+    return { ok: false, msg: 'Échec WebGPU : ' + describeError(e) };
   }
 }
 
 async function ensureTjs() {
-  if (laya.tjs) return laya.tjs;
-  const tjs = await import(TRANSFORMERS_URL);
+  if (!laya.tjs) laya.tjs = await import(TRANSFORMERS_URL);
+  return laya.tjs;
+}
+
+// Appliqué avant chaque chargement : cache choisi et niveau de logs d'ONNX Runtime
+function applyEnv(tjs) {
   tjs.env.allowLocalModels = false;
-  const urlParams = new URLSearchParams(location.search);
-  if (urlParams.get('cache') === 'browser') {
-    tjs.env.useBrowserCache = true;      // cache natif du navigateur (test)
+  if (ui.cache === 'browser') {
+    tjs.env.useBrowserCache = true;
+    tjs.env.useCustomCache = false;
   } else {
     tjs.env.useBrowserCache = false;
-    tjs.env.customCache = idbCache;      // cache IndexedDB
+    tjs.env.customCache = idbCache;
     tjs.env.useCustomCache = true;
   }
-  laya.tjs = tjs;
   try {
-    tjs.env.backends.onnx.logLevel = 'verbose';
-    tjs.env.backends.onnx.debug = true;
+    const onnx = tjs.env.backends.onnx;
+    if (ui.verbose) { onnx.logLevel = 'verbose'; onnx.debug = true; }
   } catch (e) { /* ignoré */ }
-  return tjs;
 }
 
 function setProgress(ratio, text, isError) {
@@ -516,53 +582,65 @@ function setProgress(ratio, text, isError) {
   if (!isError && ratio !== null) bar.style.width = Math.round(ratio * 100) + '%';
   else if (!isError) bar.style.width = '';
   $('#progressText').textContent = text;
+  $('#progressText').title = text;
 }
 function setLive(text) {
   $('#live').textContent = text ? 'Laya : ' + text.slice(-180).replace(/\s+/g, ' ') : '';
 }
-function describeError(e) {
-  if (e instanceof Error) return e.message || e.name;
-  if (typeof e === 'number') return 'exception native ONNX Runtime (code ' + e + ')';
-  if (typeof e === 'string') return e;
-  try { return JSON.stringify(e); } catch (x) { return String(e); }
-}
-async function loadModel() {
-  const id = $('#modelId').value.trim();
-  if (!id) throw new Error('Identifiant de modèle vide');
-  if (laya.generator && laya.loadedId === id) return laya.generator;
-  if (laya.loading && laya.loadingId === id) return laya.loading;
 
-  laya.loadingId = id;
+function settingsKey() { return [ui.model, ui.engine, ui.dtype, ui.cache].join('|'); }
+
+async function loadModel() {
+  const id = ui.model;
+  if (!id) throw new Error('Identifiant de modèle vide');
+  if (laya.aborted) throw new Error(ABORT_HINT);
+  const key = settingsKey();
+  if (laya.generator && laya.loadedKey === key) return laya.generator;
+  if (laya.loading) {
+    if (laya.loadingKey === key) return laya.loading;
+    try { await laya.loading; } catch (e) { /* ignoré */ }
+    if (laya.generator && laya.loadedKey === key) return laya.generator;
+  }
+
+  const engine = ui.engine;
+  const cacheMode = ui.cache;
+  const autoFormat = ui.dtype === 'auto';
+  let dtype = null;
+  laya.loadingKey = key;
+
   laya.loading = (async () => {
     const gpu = laya.gpu || (laya.gpu = await testWebGPU());
-    if (!gpu.ok) throw new Error(gpu.msg);
+    if (engine === 'webgpu' && !gpu.ok) throw new Error(gpu.msg);
     const tjs = await ensureTjs();
+    applyEnv(tjs);
+    dtype = pickDtype(id, engine, gpu);
+
     if (laya.generator && laya.generator.dispose) {
       try { await laya.generator.dispose(); } catch (e) { /* ignoré */ }
     }
     laya.generator = null;
-    laya.loadedId = null;
+    laya.loadedKey = null;
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignoré */ }
 
-    setProgress(null, 'Chargement du modèle…');
+    setProgress(null, 'Chargement de ' + id + ' (' + engine + ', ' + dtype + ', cache ' + cacheMode + ')…');
     const files = new Map();
     const onProgress = (p) => {
       if (p.status === 'progress' && p.file) files.set(p.file, { loaded: p.loaded || 0, total: p.total || 0 });
       else if (p.status === 'done' && p.file) { const f = files.get(p.file); if (f) f.loaded = f.total; }
       let loaded = 0, total = 0;
       files.forEach((f) => { loaded += f.loaded; total += f.total; });
-      if (total) setProgress(loaded / total, 'Téléchargement ' + fmtMo(loaded) + ' / ' + fmtMo(total) + ' Mo');
-      else setProgress(null, 'Initialisation…');
+      if (total) setProgress(loaded / total, 'Téléchargement ' + fmtMo(loaded) + ' / ' + fmtMo(total) + ' Mo (' + dtype + ')');
+      else setProgress(null, 'Initialisation (' + dtype + ')…');
     };
     const generator = await tjs.pipeline('text-generation', id, {
-      device: 'webgpu',
-      dtype: new URLSearchParams(location.search).get('dtype') || (gpu.f16 ? 'q4f16' : 'q4'),
+      device: engine,
+      dtype,
       progress_callback: onProgress
     });
     laya.generator = generator;
-    laya.loadedId = id;
+    laya.loadedKey = key;
     laya.stop = tjs.InterruptableStoppingCriteria ? new tjs.InterruptableStoppingCriteria() : null;
-    setProgress(1, 'Modèle prêt : ' + id);
+    setProgress(1, 'Modèle prêt : ' + id + ' (' + engine + ', ' + dtype + ')');
     refreshStorage();
     return generator;
   })();
@@ -570,10 +648,17 @@ async function loadModel() {
   try {
     return await laya.loading;
   } catch (e) {
-	console.error('Erreur au chargement du modèle :', e);
-	setProgress(0, 'Erreur : ' + describeError(e), true);
-	throw e;
-  }} finally {
+    console.error('Erreur au chargement du modèle :', e);
+    let msg = describeError(e);
+    if (isAbort(e)) {
+      laya.aborted = true;
+      if (autoFormat && dtype) recordFailure(id, engine, dtype);
+      msg = 'ONNX Runtime a planté (' + msg + ') avec le format ' + dtype + '. Recharge la page (F5)' +
+        (autoFormat ? ' : le format suivant sera essayé automatiquement.' : ', puis change le format, le moteur ou le modèle.');
+    }
+    setProgress(0, 'Erreur : ' + msg, true);
+    throw new Error(msg);
+  } finally {
     laya.loading = null;
   }
 }
@@ -798,7 +883,7 @@ async function runWorkflow(run, docObj) {
       for (const e of next) { const target = byId.get(e.to); if (target) queue.push({ node: target, input: ret }); }
     } catch (err) {
       step.status = 'error';
-      step.error = err && err.message ? err.message : String(err);
+      step.error = describeError(err);
     }
     step.ms = performance.now() - t0;
     setNodeStatus(node.id, step.status, step.status === 'ok' ? fmtMs(step.ms) : 'erreur');
@@ -828,21 +913,22 @@ function stepView(step) {
 }
 
 function renderRun(run) {
-  const resultBlock = [];
+  const kids = [];
+  kids.push(h('summary', {},
+    ICONS[run.status] + ' ' + run.name,
+    h('span', { class: 'muted' }, run.ms ? '  ' + fmtMs(run.ms) : '')));
+  if (run.error) kids.push(h('div', { class: 'err' }, run.error));
   if (run.result) {
-    resultBlock.push(h('h3', {}, 'Résultat'));
+    kids.push(h('h3', {}, 'Résultat'));
     const keys = Object.keys(run.result);
-    if (!keys.length) resultBlock.push(h('div', { class: 'muted' }, 'Aucun résultat final.'));
-    for (const k of keys) resultBlock.push(h('div', {}, h('div', { class: 'lbl' }, k), h('pre', {}, showValue(run.result[k]))));
+    if (!keys.length) kids.push(h('div', { class: 'muted' }, 'Aucun résultat final.'));
+    for (const k of keys) kids.push(h('div', {}, h('div', { class: 'lbl' }, k), h('pre', {}, showValue(run.result[k]))));
   }
-  run.el.replaceChildren(
-    h('summary', {},
-      ICONS[run.status] + ' ' + run.name,
-      h('span', { class: 'muted' }, run.ms ? '  ' + fmtMs(run.ms) : '')),
-    run.error ? h('div', { class: 'err' }, run.error) : null,
-    resultBlock,
-    run.steps.length ? h('h3', {}, 'Étapes') : null,
-    run.steps.map(stepView));
+  if (run.steps.length) {
+    kids.push(h('h3', {}, 'Étapes'));
+    run.steps.forEach((s) => kids.push(stepView(s)));
+  }
+  run.el.replaceChildren(...kids);
 }
 
 async function processFile(file) {
@@ -856,7 +942,7 @@ async function processFile(file) {
     run.status = run.steps.some((s) => s.status === 'error') ? 'error' : 'done';
   } catch (err) {
     run.status = runCtl.cancel ? 'cancelled' : 'error';
-    run.error = err && err.message ? err.message : String(err);
+    run.error = describeError(err);
   }
   run.ms = performance.now() - t0;
   renderRun(run);
@@ -905,13 +991,14 @@ $('#btnStop').onclick = () => {
 };
 $('#btnLoad').onclick = () => { loadModel().catch(() => {}); };
 $('#btnClearCache').onclick = async () => {
-  if (!confirm('Supprimer les modèles stockés dans l\'IndexedDB ?')) return;
-  try { await idbTx('readwrite', (s) => s.clear()); } catch (e) { alert('Échec : ' + e.message); }
+  if (!confirm('Supprimer les modèles stockés dans l\'IndexedDB ? (le cache natif du navigateur n\'est pas concerné)')) return;
+  try { await idbTx('readwrite', (s) => s.clear()); } catch (e) { alert('Échec : ' + describeError(e)); }
   refreshStorage();
 };
 
 /* ============================== Démarrage ================================= */
 (async function init() {
+  restoreSettings();
   state = loadSaved() || exampleWorkflow();
   renderAll();
   const g = await testWebGPU();
@@ -919,9 +1006,6 @@ $('#btnClearCache').onclick = async () => {
   const badge = $('#gpuBadge');
   badge.textContent = g.msg;
   badge.className = 'badge ' + (g.ok ? 'ok' : 'ko');
-  if (!g.ok) {
-    $('#btnLoad').disabled = true;
-    setProgress(0, 'WebGPU requis pour charger le modèle', true);
-  }
+  if (!g.ok && ui.engine === 'webgpu') setProgress(0, 'WebGPU requis pour charger le modèle', true);
   refreshStorage();
 })();

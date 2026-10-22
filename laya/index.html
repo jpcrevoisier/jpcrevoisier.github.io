@@ -5,25 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Workflow documents · Laya</title>
   <link rel="stylesheet" href="style.css">
-  <link id="pageIcon" rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>🕵</text></svg>">
 </head>
 <body>
 
 <header class="topbar">
   <h1>Workflow documents <span class="muted">· Laya</span></h1>
+
   <div class="topbar-group">
     <span id="gpuBadge" class="badge">WebGPU : test en cours…</span>
-    <input id="modelId" type="text" list="modelList" value="onnx-community/Qwen2.5-1.5B-Instruct"
+    <input id="modelId" type="text" list="modelList" value="onnx-community/Qwen2.5-0.5B-Instruct"
            title="Identifiant Hugging Face d'un modèle de génération de texte au format ONNX">
     <datalist id="modelList">
-      <option value="onnx-community/Qwen2.5-1.5B-Instruct"></option>
       <option value="onnx-community/Qwen2.5-0.5B-Instruct"></option>
+      <option value="onnx-community/Qwen2.5-1.5B-Instruct"></option>
       <option value="HuggingFaceTB/SmolLM2-1.7B-Instruct"></option>
     </datalist>
     <button id="btnLoad">Charger le modèle</button>
     <button id="btnClearCache" class="ghost" title="Supprime les modèles stockés dans l'IndexedDB">Vider le cache</button>
     <span id="storageInfo" class="muted"></span>
   </div>
+
+  <div class="topbar-group options">
+    <label>Moteur
+      <select id="engine">
+        <option value="webgpu">WebGPU</option>
+        <option value="wasm">CPU (WASM, diagnostic)</option>
+      </select>
+    </label>
+    <label>Format
+      <select id="dtype" title="auto : essaie q4f16, puis q4, puis q8 (un format de plus après chaque plantage et rechargement de la page)">
+        <option value="auto">auto</option>
+        <option value="q4f16">q4f16</option>
+        <option value="q4">q4</option>
+        <option value="q8">q8</option>
+        <option value="fp16">fp16</option>
+      </select>
+    </label>
+    <label>Cache
+      <select id="cacheMode">
+        <option value="idb">IndexedDB (page)</option>
+        <option value="browser">Cache natif du navigateur</option>
+      </select>
+    </label>
+    <label class="chk" title="À cocher avant de charger le modèle ; recharger la page si le moteur est déjà initialisé">
+      <input type="checkbox" id="verbose"> Logs ONNX détaillés
+    </label>
+  </div>
+
   <div class="progress-wrap">
     <div id="progressBar" class="progress"></div>
     <span id="progressText" class="progress-text">Modèle non chargé</span>
