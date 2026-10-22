@@ -52,13 +52,30 @@ input { background: var(--bg); border: 1px solid var(--border); border-radius: 6
 #editor { width: 100%; height: 100%; border: 0; outline: 0; resize: none; padding: 16px;
   background: var(--bg); color: var(--fg); tab-size: 2;
   font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* Aperçu HTML du Markdown */
 #preview { height: 100%; overflow: auto; padding: 16px 24px; max-width: 860px; }
 #preview[hidden] { display: none; }
+#preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 { margin: 1.2em 0 .5em; line-height: 1.25; }
+#preview h1, #preview h2 { padding-bottom: .25em; border-bottom: 1px solid var(--border); }
+#preview p { margin: .6em 0; }
 #preview pre { background: var(--bg2); padding: 10px; border-radius: 6px; overflow: auto; }
 #preview code { background: var(--bg2); padding: 1px 4px; border-radius: 4px; }
 #preview pre code { padding: 0; background: none; }
-#preview blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
+#preview blockquote { margin: .6em 0; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
 #preview a { color: var(--accent); }
+#preview img { max-width: 100%; height: auto; }
+#preview hr { border: 0; border-top: 1px solid var(--border); margin: 1.2em 0; }
+#preview ul, #preview ol { padding-left: 1.6em; margin: .4em 0; }
+#preview table { border-collapse: collapse; margin: .8em 0; display: block; overflow: auto; }
+#preview th, #preview td { border: 1px solid var(--border); padding: 4px 10px; }
+#preview th { background: var(--bg2); }
+
+/* Cases à cocher (l'input global a width:100%, on le neutralise ici) */
+#preview li.task { list-style: none; margin-left: -1.3em; }
+#preview li.task input[type="checkbox"] { width: auto; padding: 0; margin: 0 6px 0 0;
+  vertical-align: middle; cursor: pointer; accent-color: var(--accent); }
+#preview li.task.done { color: var(--muted); }
 
 /* Boîte de dialogue */
 dialog { border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--fg);
@@ -77,4 +94,3 @@ dialog label input { margin-top: 4px; color: var(--fg); }
   #sidebar.open { transform: none; box-shadow: 0 0 30px rgba(0,0,0,.4); }
   #btnMenu { display: inline-block; }
 }
-
