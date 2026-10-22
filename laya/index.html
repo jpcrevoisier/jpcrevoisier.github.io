@@ -28,12 +28,13 @@
   <div class="topbar-group options">
     <label>Moteur
       <select id="engine">
-        <option value="webgpu">WebGPU</option>
-        <option value="wasm">CPU (WASM, diagnostic)</option>
+        <option value="auto">Auto (WebGPU, sinon CPU)</option>
+        <option value="webgpu">WebGPU uniquement</option>
+        <option value="wasm">CPU (WASM)</option>
       </select>
     </label>
     <label>Format
-      <select id="dtype" title="auto : essaie q4f16, puis q4, puis q8 (un format de plus après chaque plantage et rechargement de la page)">
+      <select id="dtype" title="auto : WebGPU essaie q4f16 puis q4 (un format de plus après chaque plantage et rechargement de la page), le CPU utilise q4">
         <option value="auto">auto</option>
         <option value="q4f16">q4f16</option>
         <option value="q4">q4</option>

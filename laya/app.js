@@ -10,7 +10,7 @@ const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers
 const PDFJS_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
 const PDFJS_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
 const STORAGE_KEY = 'workflow-laya-v1';
-const SETTINGS_KEY = 'workflow-laya-reglages-v1';
+const SETTINGS_KEY = 'workflow-laya-reglages-v2'; // v2 : moteur « auto » par défaut
 const FAILED_KEY = 'workflow-laya-echecs-v1';
 const IDB_NAME = 'laya-modeles';
 const IDB_STORE = 'fichiers';
@@ -65,6 +65,10 @@ function describeError(e) {
   try { return JSON.stringify(e); } catch (x) { return String(e); }
 }
 function isAbort(e) { return typeof e === 'number' || /abort/i.test(describeError(e)); }
+// Perte du GPU (ex. Windows : DXGI_ERROR_DEVICE_HUNG, « Device is lost »)
+function isGpuLost(e) {
+  return !!e && ((e.name === 'AbortError') || /device.{0,20}lost|DEVICE_HUNG|DXGI|mapAsync/i.test(describeError(e)));
+}
 
 /* ============================ État du workflow ============================ */
 let state = { nodes: [], edges: [] };
@@ -473,9 +477,19 @@ function recordFailure(model, engine, dtype) {
     sessionStorage.setItem(FAILED_KEY, JSON.stringify(all));
   } catch (e) { /* ignoré */ }
 }
+function webgpuCandidates(gpu) { return gpu && gpu.f16 ? ['q4f16', 'q4'] : ['q4']; }
+
+// Moteur effectif : en mode « auto », WebGPU si disponible et pas déjà épuisé, sinon CPU (WASM)
+function resolveEngine(model, gpu) {
+  if (ui.engine !== 'auto') return ui.engine;
+  if (!gpu || !gpu.ok) return 'wasm';
+  const failed = readFailed()[model + '|webgpu'] || [];
+  return webgpuCandidates(gpu).every((d) => failed.includes(d)) ? 'wasm' : 'webgpu';
+}
+
 function pickDtype(model, engine, gpu) {
   if (ui.dtype !== 'auto') return ui.dtype;
-  const cands = engine === 'wasm' ? ['q4', 'q8'] : (gpu && gpu.f16 ? ['q4f16', 'q4', 'q8'] : ['q4', 'q8']);
+  const cands = engine === 'wasm' ? ['q4'] : webgpuCandidates(gpu);
   const failed = readFailed()[model + '|' + engine] || [];
   return cands.find((d) => !failed.includes(d)) || cands[0];
 }
@@ -530,7 +544,7 @@ async function refreshStorage() {
 /* ========================= Laya : modèle en WebGPU ======================== */
 const laya = {
   tjs: null, generator: null, loadedKey: null, loading: null, loadingKey: null,
-  stop: null, queue: Promise.resolve(), gpu: null, aborted: false
+  stop: null, queue: Promise.resolve(), gpu: null, aborted: false, dtype: null, engine: null
 };
 const runCtl = { cancel: false };
 
@@ -602,7 +616,7 @@ async function loadModel() {
     if (laya.generator && laya.loadedKey === key) return laya.generator;
   }
 
-  const engine = ui.engine;
+  let engine = ui.engine; // résolu plus bas si « auto »
   const cacheMode = ui.cache;
   const autoFormat = ui.dtype === 'auto';
   let dtype = null;
@@ -610,10 +624,13 @@ async function loadModel() {
 
   laya.loading = (async () => {
     const gpu = laya.gpu || (laya.gpu = await testWebGPU());
+    engine = resolveEngine(id, gpu);
+    laya.engine = engine;
     if (engine === 'webgpu' && !gpu.ok) throw new Error(gpu.msg);
     const tjs = await ensureTjs();
     applyEnv(tjs);
     dtype = pickDtype(id, engine, gpu);
+    laya.dtype = dtype;
 
     if (laya.generator && laya.generator.dispose) {
       try { await laya.generator.dispose(); } catch (e) { /* ignoré */ }
@@ -622,7 +639,8 @@ async function loadModel() {
     laya.loadedKey = null;
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignoré */ }
 
-    setProgress(null, 'Chargement de ' + id + ' (' + engine + ', ' + dtype + ', cache ' + cacheMode + ')…');
+    const repli = ui.engine === 'auto' && engine === 'wasm' ? ' · repli sur le CPU, plus lent' : '';
+    setProgress(null, 'Chargement de ' + id + ' (' + engine + ', ' + dtype + ', cache ' + cacheMode + ')' + repli + '…');
     const files = new Map();
     const onProgress = (p) => {
       if (p.status === 'progress' && p.file) files.set(p.file, { loaded: p.loaded || 0, total: p.total || 0 });
@@ -663,6 +681,20 @@ async function loadModel() {
   }
 }
 
+// Transforme une perte de GPU en message clair et bloque le moteur jusqu'au rechargement
+function gpuLostError(e) {
+  if (!isGpuLost(e)) return e;
+  laya.aborted = true;
+  if (ui.dtype === 'auto' && laya.dtype) recordFailure(ui.model, laya.engine || ui.engine, laya.dtype);
+  const msg = 'GPU perdu (' + describeError(e) + ') : le pilote graphique a été réinitialisé pendant le calcul. ' +
+    'Recharge la page (F5)' + (ui.dtype === 'auto' ? ' : le format suivant sera essayé automatiquement' : ', choisis le format q4') +
+    (ui.engine === 'auto'
+      ? '. Si tous les formats GPU échouent, le CPU (WASM) sera utilisé automatiquement.'
+      : '. Si ça se reproduit : réduis la taille du document, mets à jour le pilote graphique ou utilise le moteur CPU (WASM).');
+  setProgress(0, 'Erreur : ' + msg, true);
+  return new Error(msg);
+}
+
 // Une seule génération à la fois (file d'attente)
 function generate(messages, maxTokens) {
   const run = async () => {
@@ -676,7 +708,9 @@ function generate(messages, maxTokens) {
     });
     const opts = { max_new_tokens: maxTokens, do_sample: false, streamer };
     if (laya.stop) opts.stopping_criteria = laya.stop;
-    const out = await generator(messages, opts);
+    let out;
+    try { out = await generator(messages, opts); }
+    catch (e) { throw gpuLostError(e); }
     const gt = out[0].generated_text;
     const text = Array.isArray(gt) ? gt[gt.length - 1].content : String(gt);
     return String(text).trim();
@@ -716,7 +750,7 @@ function makeLaya(defaultContext, onAsk) {
   return {
     async ask(question, opts = {}) {
       const type = opts.type || 'text';
-      const maxChars = opts.maxChars || 12000;
+      const maxChars = opts.maxChars || 6000; // contexte plus court = moins de charge pour le GPU
       let context = formatContext(opts.context !== undefined ? opts.context : defaultContext);
       let truncated = false;
       if (context.length > maxChars) { context = context.slice(0, maxChars); truncated = true; }
@@ -996,6 +1030,13 @@ $('#btnClearCache').onclick = async () => {
   refreshStorage();
 };
 
+// Perte du GPU signalée en dehors de nos appels (promesse rejetée sans gestionnaire)
+window.addEventListener('unhandledrejection', (ev) => {
+  if (!isGpuLost(ev.reason)) return;
+  const err = gpuLostError(ev.reason);
+  console.error(err.message);
+});
+
 /* ============================== Démarrage ================================= */
 (async function init() {
   restoreSettings();
@@ -1004,8 +1045,9 @@ $('#btnClearCache').onclick = async () => {
   const g = await testWebGPU();
   laya.gpu = g;
   const badge = $('#gpuBadge');
-  badge.textContent = g.msg;
+  badge.textContent = g.msg + (!g.ok && ui.engine === 'auto' ? ' → repli sur le CPU (WASM)' : '');
   badge.className = 'badge ' + (g.ok ? 'ok' : 'ko');
-  if (!g.ok && ui.engine === 'webgpu') setProgress(0, 'WebGPU requis pour charger le modèle', true);
+  if (!g.ok && ui.engine === 'webgpu') setProgress(0, 'WebGPU requis pour charger le modèle (moteur « WebGPU uniquement »)', true);
+  else if (!g.ok && ui.engine === 'auto') setProgress(0, 'WebGPU indisponible : le CPU (WASM) sera utilisé, plus lent');
   refreshStorage();
 })();
