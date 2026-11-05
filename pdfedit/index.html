@@ -401,6 +401,14 @@ String.prototype.fromUtf8=function()
 {
 	return decodeURIComponent(escape(this));
 }
+String.prototype.extension=function()
+{
+	return this.split('.')[this.split('.').length-1];
+}
+String.prototype.filename=function()
+{
+	return this.split('.', this.split('.').length-1).join('.');
+}
 Date.prototype.asArray=function(time)
 {
 	if(time!=undefined)
