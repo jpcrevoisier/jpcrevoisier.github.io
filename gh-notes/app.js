@@ -43,6 +43,7 @@ async function gh(url, opts = {}) {
   const full = 'https://api.github.com/repos/' + cfg.repo + url;
   const r = await fetch(full, {
     ...opts,
+    cache: 'no-store',   // GitHub renvoie max-age=60 : sans ça, la tête de branche lue peut être périmée
     headers: {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
