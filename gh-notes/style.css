@@ -40,6 +40,11 @@ input { background: var(--bg); border: 1px solid var(--border); border-radius: 6
 #tree .file.active { background: var(--accent); color: #fff; }
 .empty { color: var(--muted); padding: 10px; }
 
+/* Drag & drop : note en cours de déplacement et zone de dépôt */
+#tree .file.dragging { opacity: .4; }
+#tree summary.drop-target { background: var(--border); outline: 2px dashed var(--accent); outline-offset: -2px; }
+#tree.drop-target { outline: 2px dashed var(--accent); outline-offset: -4px; }
+
 /* Panneau principal */
 #main { display: flex; flex-direction: column; min-width: 0; height: 100dvh; }
 .bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px;

@@ -12,6 +12,7 @@ let files = [];          // [{ path, sha }]
 let cur = null;          // { path, sha, saved }
 let dirty = false;
 let saving = false;
+let moving = false;      // déplacement (drag & drop) en cours
 let previewOn = false;
 const openDirs = new Set(JSON.parse(localStorage.getItem(LS_OPEN) || '[]'));
 
@@ -101,6 +102,7 @@ function renderNode(node, base, forceOpen) {
     const p = base + name;
     const li = document.createElement('li');
     const d = document.createElement('details');
+    d.dataset.dir = p;                       // cible de dépôt (drag & drop)
     d.open = forceOpen || openDirs.has(p);
     const s = document.createElement('summary');
     s.textContent = '📁 ' + name;
@@ -119,6 +121,9 @@ function renderNode(node, base, forceOpen) {
     div.className = 'file' + (cur && cur.path === f.path ? ' active' : '');
     div.textContent = '📝 ' + f.path.split('/').pop();
     div.title = f.path;
+    div.draggable = true;                    // déplaçable par drag & drop
+    div.dataset.path = f.path;
+    div.dataset.dir = f.path.split('/').slice(0, -1).join('/');   // déposer sur un fichier = son dossier
     div.addEventListener('click', () => openFile(f.path));
     li.append(div);
     ul.append(li);
@@ -137,6 +142,140 @@ function renderTree() {
   }
   tree.append(renderNode(buildTree(list), '', !!q));
 }
+
+// ---------- Déplacement d'une note (drag & drop) ----------
+// Un seul commit atomique via l'API Git Data : suppression de l'ancien chemin + ajout du nouveau
+// pointant sur le même blob (le contenu n'est pas retéléchargé).
+async function moveFile(oldPath, destDir) {
+  const name = oldPath.split('/').pop();
+  const newPath = destDir ? destDir + '/' + name : name;
+  if (newPath === oldPath) return;                        // même dossier : rien à faire
+  if (moving || saving) { setStatus('Opération en cours, réessayez dans un instant', 'warn'); return; }
+  const f = files.find((x) => x.path === oldPath);
+  if (!f) return;
+  if (files.some((x) => x.path === newPath)) {
+    setStatus('Une note « ' + name + ' » existe déjà dans ce dossier', 'err');
+    return;
+  }
+  if (dirty && cur && cur.path === oldPath) {
+    setStatus('Enregistrez la note avant de la déplacer', 'warn');
+    return;
+  }
+
+  moving = true;
+  setStatus('Déplacement…');
+  try {
+    const ref = await gh('/git/ref/heads/' + encPath(branch));
+    const headSha = ref.object.sha;
+    const head = await gh('/git/commits/' + headSha);
+    const tree = await gh('/git/trees', {
+      method: 'POST',
+      body: JSON.stringify({
+        base_tree: head.tree.sha,
+        tree: [
+          { path: oldPath, mode: '100644', type: 'blob', sha: null },    // suppression
+          { path: newPath, mode: '100644', type: 'blob', sha: f.sha },   // ajout (même contenu)
+        ],
+      }),
+    });
+    const commit = await gh('/git/commits', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: 'Déplacement de ' + oldPath + ' vers ' + newPath,
+        tree: tree.sha,
+        parents: [headSha],
+      }),
+    });
+    await gh('/git/refs/heads/' + encPath(branch), {
+      method: 'PATCH',
+      body: JSON.stringify({ sha: commit.sha }),
+    });
+
+    // Mise à jour de l'état local
+    f.path = newPath;
+    if (cur && cur.path === oldPath) cur.path = newPath;
+    const parts = newPath.split('/');
+    for (let i = 1; i < parts.length; i++) openDirs.add(parts.slice(0, i).join('/'));
+    localStorage.setItem(LS_OPEN, JSON.stringify([...openDirs]));
+    updateUI();
+    renderTree();
+    setStatus('Déplacé vers ' + (destDir || 'la racine') + ' (commit ' + commit.sha.slice(0, 7) + ') ✔', 'ok');
+  } catch (e) {
+    if (e.status === 409 || e.status === 422) {
+      setStatus('Conflit : le dépôt a changé. Rechargez l\'arborescence (⟳) puis réessayez.', 'err');
+    } else {
+      setStatus('Échec du déplacement : ' + e.message, 'err');
+    }
+  } finally {
+    moving = false;
+  }
+}
+
+// --- Gestion des événements drag & drop (délégation sur #tree) ---
+let dragPath = null;     // chemin de la note en cours de déplacement
+let dropEl = null;       // élément actuellement surligné
+let hoverTimer = null;   // ouverture automatique d'un dossier survolé
+
+function clearDrop() {
+  if (dropEl) dropEl.classList.remove('drop-target');
+  dropEl = null;
+  clearTimeout(hoverTimer);
+}
+
+// Détermine le dossier cible ('' = racine) et l'élément à surligner
+function dropInfo(target) {
+  const t = target.closest ? target.closest('[data-dir]') : null;
+  const dir = t ? t.dataset.dir : '';
+  const d = t ? (t.tagName === 'DETAILS' ? t : t.closest('details')) : null;
+  return { dir, el: d ? d.firstElementChild : $('#tree') };
+}
+
+const treeEl = $('#tree');
+
+treeEl.addEventListener('dragstart', (e) => {
+  const f = e.target.closest && e.target.closest('.file');
+  if (!f) return;
+  dragPath = f.dataset.path;
+  e.dataTransfer.setData('text/plain', dragPath);
+  e.dataTransfer.effectAllowed = 'move';
+  f.classList.add('dragging');
+});
+
+treeEl.addEventListener('dragend', () => {
+  dragPath = null;
+  clearDrop();
+  treeEl.querySelectorAll('.dragging').forEach((el) => el.classList.remove('dragging'));
+});
+
+treeEl.addEventListener('dragover', (e) => {
+  if (!dragPath) return;
+  e.preventDefault();                       // autorise le dépôt
+  e.dataTransfer.dropEffect = 'move';
+  const { el } = dropInfo(e.target);
+  if (el !== dropEl) {
+    clearDrop();
+    dropEl = el;
+    el.classList.add('drop-target');
+    // Un dossier fermé survolé s'ouvre après un court délai
+    if (el.tagName === 'SUMMARY' && !el.parentElement.open) {
+      hoverTimer = setTimeout(() => { el.parentElement.open = true; }, 700);
+    }
+  }
+});
+
+treeEl.addEventListener('dragleave', (e) => {
+  if (!treeEl.contains(e.relatedTarget)) clearDrop();
+});
+
+treeEl.addEventListener('drop', (e) => {
+  if (!dragPath) return;
+  e.preventDefault();
+  const { dir } = dropInfo(e.target);
+  const p = dragPath;
+  dragPath = null;
+  clearDrop();
+  moveFile(p, dir);
+});
 
 // ---------- Ouverture d'une note ----------
 async function openFile(path) {
@@ -171,7 +310,7 @@ function updateUI() {
 
 // ---------- Sauvegarde = commit + push ----------
 async function save() {
-  if (!cur || !dirty || saving) return;
+  if (!cur || !dirty || saving || moving) return;
   saving = true;
   updateUI();
   const value = $('#editor').value;
