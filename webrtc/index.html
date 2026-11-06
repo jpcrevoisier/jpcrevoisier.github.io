@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebRTC P2P</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f1f3f5;color:#252a30;font:15px Arial,sans-serif}
+header{background:#194979;color:white;padding:18px 24px}
+header h1{font-size:22px;margin:0}
+header p{margin:6px 0 0;color:#d5e2ef}
+main{max-width:1100px;margin:25px auto;padding:0 15px}
+.panel{background:white;border:1px solid #ddd;border-radius:9px;padding:18px;margin-bottom:16px}
+h2{font-size:17px;margin:0 0 14px}
+button{background:#194979;color:white;border:0;border-radius:5px;padding:11px 15px;cursor:pointer;margin:4px 3px 4px 0}
+button.secondary{background:#606b76}
+button:disabled{opacity:.4;cursor:not-allowed}
+textarea{width:100%;min-height:145px;padding:12px;border:1px solid #bbb;border-radius:5px;font:12px monospace;resize:vertical}
+input{padding:11px;border:1px solid #bbb;border-radius:5px;width:100%}
+.status{padding:12px;background:#edf1f5;border-radius:5px;margin-bottom:15px}
+.status.ok{background:#d9f2df;color:#17632d}
+.status.error{background:#fbe0e0;color:#942323}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.muted{color:#737d87;font-size:13px}
+#log{height:210px;overflow:auto;background:#171c22;color:#d8e1e9;padding:12px;border-radius:5px;font:12px monospace;white-space:pre-wrap}
+#candidates{font:12px monospace;overflow-wrap:anywhere}
+#chatMessages{height:180px;overflow:auto;border:1px solid #ddd;padding:10px;margin-bottom:10px;border-radius:5px}
+.message{padding:5px 0;border-bottom:1px solid #eee;overflow-wrap:anywhere}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>WebRTC P2P</h1>
+<p>Communication directe entre navigateurs — sans serveur de signalisation</p>
+</header>
+
+<main>
+<div class="panel">
+<h2>État de la connexion</h2>
+<div id="status" class="status">En attente d'une connexion.</div>
+<div class="muted">
+Serveur STUN : stun:stun.l.google.com:19302<br>
+Transport : UDP / ICE / DTLS / SCTP
+</div>
+</div>
+
+<div class="grid">
+<section class="panel">
+<h2>1. Créer une offre</h2>
+<p class="muted">À utiliser sur le premier navigateur (client A).</p>
+<button id="createOffer">Créer une offre</button>
+<p class="muted">Une fois générée, copie le JSON et transmets-le au client B.</p>
+</section>
+
+<section class="panel">
+<h2>2. Échanger les descriptions</h2>
+<p class="muted">Colle ici le JSON reçu de l'autre navigateur.</p>
+<textarea id="input" placeholder="Coller le JSON reçu ici..."></textarea>
+<button id="process">Traiter le JSON</button>
+</section>
+</div>
+
+<section class="panel">
+<h2>3. JSON à transmettre</h2>
+<textarea id="output" readonly placeholder="Le JSON généré apparaîtra ici..."></textarea>
+<button id="copy">Copier le JSON</button>
+</section>
+
+<section class="panel">
+<h2>4. Informations ICE</h2>
+<div id="candidates" class="muted">Aucun candidat collecté.</div>
+</section>
+
+<section class="panel">
+<h2>5. Messagerie P2P</h2>
+<div id="chatMessages"></div>
+<div class="grid">
+<input id="message" placeholder="Votre message..." disabled>
+<button id="send" disabled>Envoyer</button>
+</div>
+</section>
+
+<section class="panel">
+<h2>Journal technique</h2>
+<div id="log"></div>
+<button class="secondary" id="clearLog">Effacer le journal</button>
+</section>
+</main>
+
+<script>
+'use strict';
+
+const STUN = { urls: 'stun:stun.l.google.com:19302' };
+
+let pc = null;
+let channel = null;
+
+const $ = id => document.getElementById(id);
+
+function log(message) {
+    const time = new Date().toLocaleTimeString();
+    $('log').textContent += `[${time}] ${message}\n`;
+    $('log').scrollTop = $('log').scrollHeight;
+}
+
+function status(message, type = '') {
+    $('status').textContent = message;
+    $('status').className = 'status ' + type;
+}
+
+function updateButtons() {
+    const connected = channel && channel.readyState === 'open';
+    $('message').disabled = !connected;
+    $('send').disabled = !connected;
+}
+
+function displayCandidates(sdp) {
+    const lines = (sdp || '').split(/\r?\n/)
+        .filter(line => line.startsWith('a=candidate:'));
+
+    $('candidates').textContent = lines.length
+        ? lines.map(line => {
+            const match = line.match(/typ (host|srflx|relay)/);
+            return (match ? match[1].toUpperCase() : 'UNKNOWN') + ' : ' + line;
+        }).join('\n')
+        : 'Aucun candidat trouvé dans le SDP.';
+}
+
+function closePeer() {
+    if (pc) pc.close();
+    pc = null;
+    channel = null;
+    updateButtons();
+}
+
+function createPeer() {
+    pc = new RTCPeerConnection({
+        iceServers: [STUN],
+        iceCandidatePoolSize: 0
+    });
+
+    pc.oniceconnectionstatechange = () => {
+        log('ICE : ' + pc.iceConnectionState);
+
+        if (pc.iceConnectionState === 'connected' ||
+            pc.iceConnectionState === 'completed') {
+            status('Connexion P2P établie.', 'ok');
+        } else if (pc.iceConnectionState === 'failed') {
+            status('Échec ICE : connexion directe impossible.', 'error');
+        } else if (pc.iceConnectionState === 'disconnected') {
+            status('Connexion interrompue.', 'error');
+        }
+    };
+
+    pc.onconnectionstatechange = () => {
+        log('Connection : ' + pc.connectionState);
+    };
+
+    pc.onicegatheringstatechange = () => {
+        log('ICE Gathering : ' + pc.iceGatheringState);
+    };
+
+    pc.ondatachannel = event => {
+        log('DataChannel reçu : ' + event.channel.label);
+        setupChannel(event.channel);
+    };
+
+    return pc;
+}
+
+function setupChannel(ch) {
+    channel = ch;
+
+    channel.onopen = () => {
+        log('DataChannel ouvert.');
+        status('Connexion P2P établie.', 'ok');
+        updateButtons();
+    };
+
+    channel.onclose = () => {
+        log('DataChannel fermé.');
+        status('Canal fermé.', 'error');
+        updateButtons();
+    };
+
+    channel.onerror = error => log('Erreur DataChannel : ' + error);
+
+    channel.onmessage = event => addMessage('Autre client', event.data);
+
+    updateButtons();
+}
+
+function addMessage(sender, content) {
+    const div = document.createElement('div');
+    div.className = 'message';
+
+    const strong = document.createElement('strong');
+    strong.textContent = sender + ' : ';
+
+    div.appendChild(strong);
+    div.appendChild(document.createTextNode(content));
+
+    $('chatMessages').appendChild(div);
+    $('chatMessages').scrollTop = $('chatMessages').scrollHeight;
+}
+
+function waitForIce(timeout = 60000) {
+    return new Promise((resolve, reject) => {
+        if (pc.iceGatheringState === 'complete') {
+            resolve();
+            return;
+        }
+
+        const currentPc = pc;
+        const timer = setTimeout(() => {
+            currentPc.removeEventListener('icegatheringstatechange', check);
+            reject(new Error('Délai de collecte ICE dépassé.'));
+        }, timeout);
+
+        function check() {
+            if (currentPc.iceGatheringState === 'complete') {
+                clearTimeout(timer);
+                currentPc.removeEventListener('icegatheringstatechange', check);
+                resolve();
+            }
+        }
+
+        currentPc.addEventListener('icegatheringstatechange', check);
+    });
+}
+
+function exportDescription(type) {
+    const description = pc.localDescription;
+    const json = {
+        protocol: 'P2P-WEBRTC',
+        version: 1,
+        type,
+        createdAt: new Date().toISOString(),
+        sdp: description.sdp
+    };
+
+    $('output').value = JSON.stringify(json, null, 2);
+    displayCandidates(description.sdp);
+    log('JSON ' + type + ' généré.');
+}
+
+async function createOffer() {
+    try {
+        closePeer();
+        $('output').value = '';
+        $('candidates').textContent = 'Collecte ICE...';
+        status('Création de l’offre...');
+
+        createPeer();
+
+        channel = pc.createDataChannel('messages', { ordered: true });
+        setupChannel(channel);
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        log('Offre créée. Collecte des candidats ICE...');
+        status('Collecte des candidats ICE...');
+
+        await waitForIce();
+        exportDescription('offer');
+        status('Offre prête. Transmets le JSON au client B.');
+    } catch (error) {
+        log('ERREUR : ' + error.message);
+        status(error.message, 'error');
+    }
+}
+
+async function createAnswer(offer) {
+    try {
+        closePeer();
+        $('output').value = '';
+        $('candidates').textContent = 'Collecte ICE...';
+        status('Traitement de l’offre reçue...');
+
+        createPeer();
+
+        await pc.setRemoteDescription({ type: 'offer', sdp: offer.sdp });
+        log('Offre distante enregistrée.');
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        log('Réponse créée. Collecte ICE...');
+        status('Collecte des candidats ICE...');
+
+        await waitForIce();
+        exportDescription('answer');
+        status('Réponse prête. Transmets le JSON au client A.');
+    } catch (error) {
+        log('ERREUR : ' + error.message);
+        status(error.message, 'error');
+    }
+}
+
+async function applyAnswer(answer) {
+    try {
+        if (!pc || pc.signalingState !== 'have-local-offer') {
+            throw new Error('Aucune offre locale en attente.');
+        }
+
+        await pc.setRemoteDescription({ type: 'answer', sdp: answer.sdp });
+        log('Réponse distante enregistrée.');
+        status('Réponse reçue. Négociation ICE en cours.');
+    } catch (error) {
+        log('ERREUR : ' + error.message);
+        status(error.message, 'error');
+    }
+}
+
+async function processInput() {
+    try {
+        const raw = $('input').value.trim();
+        if (!raw) throw new Error('Aucun JSON fourni.');
+
+        const data = JSON.parse(raw);
+
+        if (data.protocol !== 'P2P-WEBRTC' ||
+            data.version !== 1 ||
+            typeof data.sdp !== 'string') {
+            throw new Error('Format JSON non reconnu.');
+        }
+
+        if (!['offer', 'answer'].includes(data.type)) {
+            throw new Error('Type SDP inconnu.');
+        }
+
+        if (data.type === 'offer') await createAnswer(data);
+        else await applyAnswer(data);
+    } catch (error) {
+        log('ERREUR : ' + error.message);
+        status(error.message, 'error');
+    }
+}
+
+async function copyOutput() {
+    const text = $('output').value;
+    if (!text) {
+        status('Aucun JSON à copier.', 'error');
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(text);
+        status('JSON copié dans le presse-papiers.', 'ok');
+    } catch {
+        $('output').focus();
+        $('output').select();
+        document.execCommand('copy');
+        status('JSON sélectionné : copie manuelle possible.');
+    }
+}
+
+function sendMessage() {
+    const text = $('message').value.trim();
+    if (!text || !channel || channel.readyState !== 'open') return;
+
+    try {
+        channel.send(text);
+        addMessage('Moi', text);
+        $('message').value = '';
+    } catch (error) {
+        log('Erreur envoi : ' + error.message);
+    }
+}
+
+$('createOffer').addEventListener('click', createOffer);
+$('process').addEventListener('click', processInput);
+$('copy').addEventListener('click', copyOutput);
+$('send').addEventListener('click', sendMessage);
+$('message').addEventListener('keydown', event => {
+    if (event.key === 'Enter') sendMessage();
+});
+$('clearLog').addEventListener('click', () => $('log').textContent = '');
+
+log('Client WebRTC initialisé.');
+log('STUN configuré : ' + STUN.urls);
+</script>
+</body>
+</html>
