@@ -14,6 +14,7 @@ Quelques fichiers html autonomes pour des petits usages / besoins ...
  - [☳ Scan ](https://jpcrevoisier.github.io/scan/)
  - [🕵 Laya ](https://jpcrevoisier.github.io/laya/)
  - [🕵 KolibriOS ](https://jpcrevoisier.github.io/kolibrios/)
+ - [📥 Drop inspector ](https://jpcrevoisier.github.io/drop/)
  
 
 Le push depuis windows ... 

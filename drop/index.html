@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Debug Inspector</title>
+	<link id="pageIcon" rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><text y='50' font-size='50'>📥</text></svg>">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Dexie.js for IndexedDB storage -->
+    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    <!-- JSZip for inspecting ZIP archive contents -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for dark panels */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased bg-slate-950 text-slate-200 overflow-hidden">
+
+    <!-- Header Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex justify-between items-center shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="bg-brand-600 text-white p-2 rounded-lg shadow-lg">
+                <i class="fa-solid me-0 fa-bug text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-white tracking-wide">File Debug Inspector</h1>
+                <p class="text-xs text-slate-400">Analyse de fichiers locale &amp; Stockage IndexedDB</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3 text-xs">
+            <span id="db-status" class="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                IndexedDB Actif
+            </span>
+        </div>
+    </header>
+
+    <!-- Main 3-Column Layout -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- LEFT COLUMN: History List -->
+        <aside class="w-80 bg-slate-900/60 border-r border-slate-800 flex flex-col shrink-0">
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Historique
+                </h2>
+                <button id="clear-all-btn" class="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-2 py-1 rounded transition flex items-center gap-1">
+                    <i class="fa-solid fa-trash-can"></i> Tout effacer
+                </button>
+            </div>
+            
+            <div id="history-list" class="flex-1 overflow-y-auto p-3 space-y-2">
+                <!-- History Items will be rendered here dynamically -->
+                <div class="text-center py-8 text-slate-500 text-xs">
+                    Aucun fichier enregisté dans l'historique.
+                </div>
+            </div>
+        </aside>
+
+        <!-- MIDDLE COLUMN: Drop Zone -->
+        <main class="flex-1 bg-slate-950 p-6 flex flex-col justify-center items-center relative border-r border-slate-800 overflow-y-auto">
+            <div id="drop-zone" class="w-full max-w-xl border-2 border-dashed border-slate-700 hover:border-brand-500 bg-slate-900/40 hover:bg-brand-500/5 rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-4 group">
+                <input type="file" id="file-input" multiple class="hidden" />
+                
+                <div class="w-20 h-20 rounded-full bg-slate-800 group-hover:bg-brand-500/20 text-slate-400 group-hover:text-brand-400 flex items-center justify-center transition-all duration-200 group-hover:scale-110 shadow-inner">
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+                </div>
+
+                <div>
+                    <p class="text-base font-semibold text-slate-200 group-hover:text-brand-400 transition">
+                        Glissez &amp; Déposez vos fichiers ici
+                    </p>
+                    <p class="text-xs text-slate-400 mt-1">
+                        ou cliquez sur le bouton ci-dessous pour choisir un fichier
+                    </p>
+                </div>
+
+                <button type="button" onclick="document.getElementById('file-input').click(); event.stopPropagation();" 
+                        class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-semibold shadow-lg transition flex items-center gap-2">
+                    <i class="fa-solid fa-folder-open"></i> Parcourir les fichiers
+                </button>
+
+                <div class="flex items-center gap-2 text-xs text-slate-500 bg-slate-900 px-3 py-1.5 rounded-full border border-slate-800">
+                    <i class="fa-solid fa-shield-halved text-emerald-400"></i>
+                    Support Webmail, URLs &amp; Fichiers Locaux
+                </div>
+            </div>
+
+            <!-- Warning/Alert Message Container -->
+            <div id="drop-error-alert" class="w-full max-w-xl mt-4 hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-base text-amber-400 shrink-0 mt-0.5"></i>
+                <div id="drop-error-msg"></div>
+            </div>
+
+            <!-- Dropped files list summary (when multiple dropped) -->
+            <div id="multi-file-summary" class="w-full max-w-xl mt-4 hidden">
+                <p class="text-xs text-slate-400 mb-2">Fichiers récemment déposés :</p>
+                <div id="multi-file-list" class="flex flex-wrap gap-2"></div>
+            </div>
+        </main>
+
+        <!-- RIGHT COLUMN: Detailed Debug Inspector -->
+        <section class="w-1/2 bg-slate-900/40 flex flex-col shrink-0 overflow-hidden">
+            <!-- Inspector Header -->
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <i class="fa-solid fa-code"></i> Inspecteur de Debug
+                </h2>
+                <div id="selected-file-badge" class="text-xs text-slate-400 font-mono truncate max-w-xs">
+                    Aucun fichier sélectionné
+                </div>
+            </div>
+
+            <!-- Inspector Content Area -->
+            <div id="inspector-body" class="flex-1 overflow-y-auto p-4 space-y-4">
+                
+                <div id="empty-inspector-state" class="h-full flex flex-col items-center justify-center text-slate-600 gap-3">
+                    <i class="fa-solid fa-bug text-5xl"></i>
+                    <p class="text-sm">Déposez un fichier ou choisissez-en un dans l'historique pour afficher les informations de debug.</p>
+                </div>
+
+                <div id="inspector-content" class="space-y-4 hidden">
+                    
+                    <!-- Metadata Cards Grid -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Nom du fichier</span>
+                            <span id="meta-name" class="text-sm font-medium text-slate-200 break-all"></span>
+                        </div>
+                        <div class="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Taille</span>
+                            <span id="meta-size" class="text-sm font-medium text-slate-200"></span>
+                        </div>
+                        <div class="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Type MIME</span>
+                            <span id="meta-mime" class="text-sm font-mono text-emerald-400 break-all"></span>
+                        </div>
+                        <div class="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Dernière modification</span>
+                            <span id="meta-date" class="text-sm font-medium text-slate-200"></span>
+                        </div>
+                    </div>
+
+                    <!-- Additional Details Panel -->
+                    <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-2">
+                        <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Informations Système &amp; Extensions</span>
+                        <div id="meta-extra" class="text-xs font-mono text-slate-300 space-y-1"></div>
+                    </div>
+
+                    <!-- Structure / Archive Inspection (if ZIP) -->
+                    <div id="archive-section" class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-2 hidden">
+                        <span class="text-[10px] text-amber-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-zipper"></i> Contenu de l'Archive (ZIP)
+                        </span>
+                        <div id="archive-tree" class="text-xs font-mono bg-slate-950 p-2.5 rounded-lg border border-slate-800/80 max-h-48 overflow-y-auto space-y-1"></div>
+                    </div>
+
+                    <!-- Text Preview / Hex Dump / Raw Log -->
+                    <div class="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                        <div class="bg-slate-800/60 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider" id="preview-title">Aperçu du contenu</span>
+                            <div class="flex gap-2 text-xs">
+                                <button id="btn-view-text" class="px-2 py-0.5 rounded bg-brand-600 text-white font-medium">Texte/JSON</button>
+                                <button id="btn-view-hex" class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600">Hex Dump</button>
+                            </div>
+                        </div>
+                        <pre id="debug-preview" class="p-4 text-xs font-mono text-slate-300 overflow-x-auto max-h-80 bg-slate-950/80 leading-relaxed"></pre>
+                    </div>
+
+                </div>
+
+            </div>
+        </section>
+
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // --- 1. Database Initialization (Dexie.js) ---
+        const db = new Dexie("FileDebugDB");
+        db.version(1).stores({
+            files: "++id, name, type, size, lastModified, created"
+        });
+
+        // --- State variables ---
+        let currentFileRecord = null;
+        let activeViewMode = 'text'; // 'text' or 'hex'
+
+        // --- 2. DOM Elements ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const historyList = document.getElementById('history-list');
+        const clearAllBtn = document.getElementById('clear-all-btn');
+        
+        const emptyInspectorState = document.getElementById('empty-inspector-state');
+        const inspectorContent = document.getElementById('inspector-content');
+        const selectedFileBadge = document.getElementById('selected-file-badge');
+        
+        const metaName = document.getElementById('meta-name');
+        const metaSize = document.getElementById('meta-size');
+        const metaMime = document.getElementById('meta-mime');
+        const metaDate = document.getElementById('meta-date');
+        const metaExtra = document.getElementById('meta-extra');
+        
+        const archiveSection = document.getElementById('archive-section');
+        const archiveTree = document.getElementById('archive-tree');
+        
+        const previewTitle = document.getElementById('preview-title');
+        const debugPreview = document.getElementById('debug-preview');
+        const btnViewText = document.getElementById('btn-view-text');
+        const btnViewHex = document.getElementById('btn-view-hex');
+
+        const multiFileSummary = document.getElementById('multi-file-summary');
+        const multiFileList = document.getElementById('multi-file-list');
+        const dropErrorAlert = document.getElementById('drop-error-alert');
+        const dropErrorMsg = document.getElementById('drop-error-msg');
+
+        // --- 3. Utility Functions ---
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Octets';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Octets', 'Ko', 'Mo', 'Go', 'To'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function getFileExtension(filename) {
+            return filename.slice((filename.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+        }
+
+        function bufferToHex(buffer, maxBytes = 512) {
+            const byteArray = new Uint8Array(buffer.slice(0, maxBytes));
+            let hexStr = '';
+            let asciiStr = '';
+            let result = '';
+
+            for (let i = 0; i < byteArray.length; i++) {
+                const byte = byteArray[i];
+                hexStr += byte.toString(16).padStart(2, '0').toUpperCase() + ' ';
+                asciiStr += (byte >= 32 && byte <= 126) ? String.fromCharCode(byte) : '.';
+
+                if ((i + 1) % 16 === 0 || i === byteArray.length - 1) {
+                    const address = (Math.floor(i / 16) * 16).toString(16).padStart(8, '0').toUpperCase();
+                    const paddedHex = hexStr.padEnd(48, ' ');
+                    result += `${address}  ${paddedHex} |${asciiStr}|\n`;
+                    hexStr = '';
+                    asciiStr = '';
+                }
+            }
+            if (buffer.byteLength > maxBytes) {
+                result += `\n... [Aperçu tronqué à ${maxBytes} octets sur ${buffer.byteLength}]`;
+            }
+            return result;
+        }
+
+        function hideAlert() {
+            dropErrorAlert.classList.add('hidden');
+            dropErrorMsg.innerHTML = '';
+        }
+
+        function showAlert(htmlMessage) {
+            dropErrorAlert.classList.remove('hidden');
+            dropErrorMsg.innerHTML = htmlMessage;
+        }
+
+        // --- 4. Database Operations ---
+        async function saveFileRecord(name, type, size, lastModified, arrayBuffer) {
+            const record = {
+                name: name || 'fichier_sans_nom.bin',
+                type: type || 'application/octet-stream',
+                size: size || arrayBuffer.byteLength || 0,
+                lastModified: lastModified || Date.now(),
+                created: Date.now(),
+                data: arrayBuffer
+            };
+            const id = await db.files.add(record);
+            record.id = id;
+            return record;
+        }
+
+        async function loadHistory() {
+            const files = await db.files.orderBy('created').reverse().toArray();
+            renderHistoryUI(files);
+        }
+
+        async function deleteFileRecord(id, e) {
+            e.stopPropagation();
+            await db.files.delete(id);
+            if (currentFileRecord && currentFileRecord.id === id) {
+                resetInspectorUI();
+            }
+            loadHistory();
+        }
+
+        async function clearAllRecords() {
+            if (confirm("Voulez-vous vraiment supprimer tout l'historique ?")) {
+                await db.files.clear();
+                resetInspectorUI();
+                loadHistory();
+            }
+        }
+
+        // --- 5. UI Rendering Functions ---
+        function renderHistoryUI(files) {
+            if (files.length === 0) {
+                historyList.innerHTML = `<div class="text-center py-8 text-slate-500 text-xs">Aucun fichier enregistré dans l'historique.</div>`;
+                return;
+            }
+
+            historyList.innerHTML = files.map(file => {
+                const isActive = currentFileRecord && currentFileRecord.id === file.id;
+                const ext = getFileExtension(file.name) || 'bin';
+                return `
+                    <div onclick="selectFileFromHistory(${file.id})" 
+                         class="group p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between gap-2
+                                ${isActive ? 'bg-brand-500/10 border-brand-500/40 text-brand-300' : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-300'}">
+                        <div class="flex items-center gap-2 min-w-0 flex-1">
+                            <span class="uppercase font-bold text-[9px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 shrink-0">
+                                ${ext}
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <p class="font-medium truncate">${escapeHtml(file.name)}</p>
+                                <p class="text-[10px] text-slate-500 font-mono">${formatBytes(file.size)}</p>
+                            </div>
+                        </div>
+                        <button onclick="deleteFileRecord(${file.id}, event)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        async function selectFileFromHistory(id) {
+            const record = await db.files.get(id);
+            if (record) {
+                inspectFileRecord(record);
+            }
+        }
+
+        function resetInspectorUI() {
+            currentFileRecord = null;
+            emptyInspectorState.classList.remove('hidden');
+            inspectorContent.classList.add('hidden');
+            selectedFileBadge.textContent = "Aucun fichier sélectionné";
+        }
+
+        async function inspectFileRecord(record) {
+            currentFileRecord = record;
+            loadHistory();
+
+            emptyInspectorState.classList.add('hidden');
+            inspectorContent.classList.remove('hidden');
+
+            selectedFileBadge.textContent = record.name;
+            metaName.textContent = record.name;
+            metaSize.textContent = `${formatBytes(record.size)} (${record.size.toLocaleString()} octets)`;
+            metaMime.textContent = record.type || 'Non spécifié';
+            metaDate.textContent = new Date(record.lastModified).toLocaleString('fr-FR');
+
+            const ext = getFileExtension(record.name);
+            metaExtra.innerHTML = `
+                <div>Extension : <span class="text-brand-400 font-bold">.${ext || 'aucune'}</span></div>
+                <div>ID IndexedDB : <span class="text-slate-400">${record.id}</span></div>
+                <div>Horodatage d'import : <span class="text-slate-400">${new Date(record.created).toLocaleString('fr-FR')}</span></div>
+            `;
+
+            archiveSection.classList.add('hidden');
+            archiveTree.innerHTML = '';
+
+            if (ext === 'zip' || record.type.includes('zip')) {
+                try {
+                    const zip = await JSZip.loadAsync(record.data);
+                    const filesInZip = Object.keys(zip.files);
+                    if (filesInZip.length > 0) {
+                        archiveSection.classList.remove('hidden');
+                        archiveTree.innerHTML = filesInZip.map(path => {
+                            const isDir = zip.files[path].dir;
+                            return `<div class="${isDir ? 'text-amber-300' : 'text-slate-300'}">
+                                <i class="fa-solid ${isDir ? 'fa-folder' : 'fa-file'} text-[10px] me-1"></i>${escapeHtml(path)}
+                            </div>`;
+                        }).join('');
+                    }
+                } catch (e) {
+                    console.warn("Erreur lors de la lecture du ZIP :", e);
+                }
+            }
+
+            renderPreviewContent();
+        }
+
+        function renderPreviewContent() {
+            if (!currentFileRecord) return;
+
+            const buffer = currentFileRecord.data;
+
+            if (activeViewMode === 'hex') {
+                previewTitle.textContent = "Aperçu Hexadécimal (512 octets)";
+                debugPreview.textContent = bufferToHex(buffer);
+                btnViewHex.className = "px-2 py-0.5 rounded bg-brand-600 text-white font-medium";
+                btnViewText.className = "px-2 py-0.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600";
+            } else {
+                previewTitle.textContent = "Aperçu du texte";
+                btnViewText.className = "px-2 py-0.5 rounded bg-brand-600 text-white font-medium";
+                btnViewHex.className = "px-2 py-0.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600";
+
+                const textDecoder = new TextDecoder('utf-8', { fatal: false });
+                const textContent = textDecoder.decode(buffer.slice(0, 10000));
+
+                try {
+                    const parsedJson = JSON.parse(textContent);
+                    debugPreview.textContent = JSON.stringify(parsedJson, null, 2);
+                } catch (e) {
+                    debugPreview.textContent = textContent || "[Fichier binaire ou vide]";
+                }
+            }
+        }
+
+        // --- 6. Event Listeners & Robust Drag and Drop Handling ---
+
+        dropZone.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+                fileInput.click();
+            }
+        });
+
+        fileInput.addEventListener('change', async (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                hideAlert();
+                await processFileList(e.target.files);
+            }
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('border-brand-500', 'bg-brand-500/10');
+            }, false);
+        });
+
+        ['dragleave'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('border-brand-500', 'bg-brand-500/10');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('border-brand-500', 'bg-brand-500/10');
+            hideAlert();
+
+            const dt = e.dataTransfer;
+            if (!dt) return;
+
+            let recordsProcessed = [];
+
+            // 1. Fichiers standards du système de fichiers
+            if (dt.files && dt.files.length > 0) {
+                recordsProcessed = await processFileList(dt.files);
+            } 
+            // 2. Traitement des items (Webmail, Outlook Web, liens, extraits texte/HTML)
+            else if (dt.items && dt.items.length > 0) {
+                for (let item of dt.items) {
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile();
+                        if (file) {
+                            const buffer = await file.arrayBuffer();
+                            const rec = await saveFileRecord(file.name, file.type, file.size, file.lastModified, buffer);
+                            recordsProcessed.push(rec);
+                        }
+                    } else if (item.kind === 'string') {
+                        await new Promise((resolve) => {
+                            item.getAsString(async (str) => {
+                                if (str && str.trim().length > 0) {
+                                    const encoder = new TextEncoder();
+                                    const buffer = encoder.encode(str).buffer;
+                                    const ext = item.type.includes('html') ? 'html' : (item.type.includes('uri') ? 'url' : 'txt');
+                                    const name = `webmail_drop_${Date.now()}.${ext}`;
+                                    const rec = await saveFileRecord(name, item.type || 'text/plain', buffer.byteLength, Date.now(), buffer);
+                                    recordsProcessed.push(rec);
+                                }
+                                resolve();
+                            });
+                        });
+                    }
+                }
+            }
+
+            // 3. Synthèse et gestion des échecs (Client lourd Outlook / format non pris en charge)
+            if (recordsProcessed.length > 0) {
+                await loadHistory();
+                inspectFileRecord(recordsProcessed[recordsProcessed.length - 1]);
+            } else {
+                showAlert(`
+                    <div>
+                        <strong>Glisser-déposer non reconnu ou restreint :</strong><br>
+                        Le client lourd <em>Outlook Desktop</em> utilise des descripteurs OLE/COM privés bloqués par la sécurité des navigateurs Web.<br>
+                        <span class="underline">Solution :</span> Utilisez le bouton <strong>"Parcourir les fichiers"</strong> ci-dessus ou glissez d'abord la pièce jointe sur votre bureau.
+                    </div>
+                `);
+            }
+        });
+
+        async function processFileList(files) {
+            const savedRecords = [];
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const buffer = await file.arrayBuffer();
+                const record = await saveFileRecord(file.name, file.type, file.size, file.lastModified, buffer);
+                savedRecords.push(record);
+            }
+            await loadHistory();
+            if (savedRecords.length > 0) {
+                inspectFileRecord(savedRecords[savedRecords.length - 1]);
+            }
+            return savedRecords;
+        }
+
+        // Preview View Mode switch
+        btnViewText.addEventListener('click', () => {
+            activeViewMode = 'text';
+            renderPreviewContent();
+        });
+
+        btnViewHex.addEventListener('click', () => {
+            activeViewMode = 'hex';
+            renderPreviewContent();
+        });
+
+        clearAllBtn.addEventListener('click', clearAllRecords);
+
+        window.onload = () => {
+            loadHistory();
+        };
+    </script>
+</body>
+</html>
