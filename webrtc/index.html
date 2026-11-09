@@ -10,24 +10,29 @@ body{margin:0;background:#f1f3f5;color:#252a30;font:15px Arial,sans-serif}
 header{background:#194979;color:white;padding:18px 24px}
 header h1{font-size:22px;margin:0}
 header p{margin:6px 0 0;color:#d5e2ef}
-main{max-width:1100px;margin:25px auto;padding:0 15px}
+main{max-width:900px;margin:25px auto;padding:0 15px}
 .panel{background:white;border:1px solid #ddd;border-radius:9px;padding:18px;margin-bottom:16px}
 h2{font-size:17px;margin:0 0 14px}
 button{background:#194979;color:white;border:0;border-radius:5px;padding:11px 15px;cursor:pointer;margin:4px 3px 4px 0}
 button.secondary{background:#606b76}
 button:disabled{opacity:.4;cursor:not-allowed}
-textarea{width:100%;min-height:145px;padding:12px;border:1px solid #bbb;border-radius:5px;font:12px monospace;resize:vertical}
 input{padding:11px;border:1px solid #bbb;border-radius:5px;width:100%}
 .status{padding:12px;background:#edf1f5;border-radius:5px;margin-bottom:15px}
 .status.ok{background:#d9f2df;color:#17632d}
 .status.error{background:#fbe0e0;color:#942323}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid{display:grid;grid-template-columns:1fr auto;gap:10px}
 .muted{color:#737d87;font-size:13px}
-#log{height:210px;overflow:auto;background:#171c22;color:#d8e1e9;padding:12px;border-radius:5px;font:12px monospace;white-space:pre-wrap}
-#candidates{font:12px monospace;overflow-wrap:anywhere}
+#log{height:180px;overflow:auto;background:#171c22;color:#d8e1e9;padding:12px;border-radius:5px;font:12px monospace;white-space:pre-wrap}
 #chatMessages{height:180px;overflow:auto;border:1px solid #ddd;padding:10px;margin-bottom:10px;border-radius:5px}
 .message{padding:5px 0;border-bottom:1px solid #eee;overflow-wrap:anywhere}
-@media(max-width:700px){.grid{grid-template-columns:1fr}}
+
+/* Zone unique : dépôt + lien à glisser */
+.drop-zone{border:2px dashed #9aa8b5;border-radius:9px;padding:26px 18px;text-align:center;transition:.15s;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.drop-zone.drag-over{border-color:#00795A;background:#eef8f3}
+.drop-zone.ready{border-style:solid;border-color:#194979;background:#f4f8fc}
+.drop-hint{margin:0;color:#65717d}
+#link{display:none;background:#194979;color:white;text-decoration:none;padding:13px 20px;border-radius:7px;cursor:grab;font-weight:bold;user-select:none}
+#link:active{cursor:grabbing}
 </style>
 </head>
 <body>
@@ -46,35 +51,23 @@ Transport : UDP / ICE / DTLS / SCTP
 </div>
 </div>
 
-<div class="grid">
 <section class="panel">
-<h2>1. Créer une offre</h2>
-<p class="muted">À utiliser sur le premier navigateur (client A).</p>
+<h2>Échange de connexion</h2>
+<div id="dropZone" class="drop-zone">
+<p id="hint" class="drop-hint">Glisse ici le lien reçu de l'autre client<br>(ou colle-le avec Ctrl+V), ou crée une offre.</p>
 <button id="createOffer">Créer une offre</button>
-<p class="muted">Une fois générée, copie le JSON et transmets-le au client B.</p>
-</section>
-
-<section class="panel">
-<h2>2. Échanger les descriptions</h2>
-<p class="muted">Colle ici le JSON reçu de l'autre navigateur.</p>
-<textarea id="input" placeholder="Coller le JSON reçu ici..."></textarea>
-<button id="process">Traiter le JSON</button>
-</section>
+<a id="link" draggable="true" href="#">🔗 Glisse ce lien vers l'autre client</a>
+<button id="copy" class="secondary" style="display:none">Copier le lien</button>
 </div>
-
-<section class="panel">
-<h2>3. JSON à transmettre</h2>
-<textarea id="output" readonly placeholder="Le JSON généré apparaîtra ici..."></textarea>
-<button id="copy">Copier le JSON</button>
 </section>
 
 <section class="panel">
-<h2>4. Informations ICE</h2>
+<h2>Informations ICE</h2>
 <div id="candidates" class="muted">Aucun candidat collecté.</div>
 </section>
 
 <section class="panel">
-<h2>5. Messagerie P2P</h2>
+<h2>Messagerie P2P</h2>
 <div id="chatMessages"></div>
 <div class="grid">
 <input id="message" placeholder="Votre message..." disabled>
@@ -93,9 +86,11 @@ Transport : UDP / ICE / DTLS / SCTP
 'use strict';
 
 const STUN = { urls: 'stun:stun.l.google.com:19302' };
+const HASH_KEY = '#p2p=';
 
 let pc = null;
 let channel = null;
+let selfDrag = false; // vrai pendant qu'on glisse notre propre lien
 
 const $ = id => document.getElementById(id);
 
@@ -116,6 +111,73 @@ function updateButtons() {
     $('send').disabled = !connected;
 }
 
+/* ---------- Encodage / décodage du lien ---------- */
+
+function toB64u(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromB64u(text) {
+    const b64 = text.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '='.repeat((4 - b64.length % 4) % 4));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+}
+
+// Préfixe "z" = compressé (deflate-raw), "r" = brut
+async function pack(obj) {
+    let data = new TextEncoder().encode(JSON.stringify(obj));
+    let prefix = 'r';
+
+    if (typeof CompressionStream !== 'undefined') {
+        const stream = new Blob([data]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+        data = new Uint8Array(await new Response(stream).arrayBuffer());
+        prefix = 'z';
+    }
+    return prefix + toB64u(data);
+}
+
+async function unpack(payload) {
+    let data = fromB64u(payload.slice(1));
+
+    if (payload[0] === 'z') {
+        if (typeof DecompressionStream === 'undefined') {
+            throw new Error('Ce navigateur ne gère pas la décompression du lien.');
+        }
+        const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        data = new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    return JSON.parse(new TextDecoder().decode(data));
+}
+
+function extractPayload(text) {
+    const match = (text || '').match(/#p2p=([A-Za-z0-9_-]+)/);
+    return match ? match[1] : null;
+}
+
+/* ---------- Interface du lien ---------- */
+
+function showLink(payload) {
+    const url = location.origin + location.pathname + HASH_KEY + payload;
+    $('link').href = url;
+    $('link').style.display = 'inline-block';
+    $('copy').style.display = 'inline-block';
+    $('createOffer').style.display = 'none';
+    $('hint').innerHTML = 'Glisse le lien ci-dessous sur la zone de l\'autre client.';
+    $('dropZone').classList.add('ready');
+}
+
+function resetZone() {
+    $('link').style.display = 'none';
+    $('copy').style.display = 'none';
+    $('createOffer').style.display = '';
+    $('dropZone').classList.remove('ready');
+    $('hint').innerHTML = 'Glisse ici le lien reçu de l\'autre client<br>(ou colle-le avec Ctrl+V), ou crée une offre.';
+}
+
 function displayCandidates(sdp) {
     const lines = (sdp || '').split(/\r?\n/)
         .filter(line => line.startsWith('a=candidate:'));
@@ -127,6 +189,8 @@ function displayCandidates(sdp) {
         }).join('\n')
         : 'Aucun candidat trouvé dans le SDP.';
 }
+
+/* ---------- WebRTC ---------- */
 
 function closePeer() {
     if (pc) pc.close();
@@ -154,13 +218,8 @@ function createPeer() {
         }
     };
 
-    pc.onconnectionstatechange = () => {
-        log('Connection : ' + pc.connectionState);
-    };
-
-    pc.onicegatheringstatechange = () => {
-        log('ICE Gathering : ' + pc.iceGatheringState);
-    };
+    pc.onconnectionstatechange = () => log('Connection : ' + pc.connectionState);
+    pc.onicegatheringstatechange = () => log('ICE Gathering : ' + pc.iceGatheringState);
 
     pc.ondatachannel = event => {
         log('DataChannel reçu : ' + event.channel.label);
@@ -186,7 +245,6 @@ function setupChannel(ch) {
     };
 
     channel.onerror = error => log('Erreur DataChannel : ' + error);
-
     channel.onmessage = event => addMessage('Autre client', event.data);
 
     updateButtons();
@@ -231,25 +289,20 @@ function waitForIce(timeout = 60000) {
     });
 }
 
-function exportDescription(type) {
+// Génère le lien à partir de la description locale
+async function exportLink(type) {
     const description = pc.localDescription;
-    const json = {
-        protocol: 'P2P-WEBRTC',
-        version: 1,
-        type,
-        createdAt: new Date().toISOString(),
-        sdp: description.sdp
-    };
+    const payload = await pack({ t: type, s: description.sdp });
 
-    $('output').value = JSON.stringify(json, null, 2);
     displayCandidates(description.sdp);
-    log('JSON ' + type + ' généré.');
+    showLink(payload);
+    log('Lien ' + type + ' généré.');
 }
 
 async function createOffer() {
     try {
         closePeer();
-        $('output').value = '';
+        resetZone();
         $('candidates').textContent = 'Collecte ICE...';
         status('Création de l’offre...');
 
@@ -265,8 +318,8 @@ async function createOffer() {
         status('Collecte des candidats ICE...');
 
         await waitForIce();
-        exportDescription('offer');
-        status('Offre prête. Transmets le JSON au client B.');
+        await exportLink('offer');
+        status('Lien prêt. Glisse-le sur la zone du client B.');
     } catch (error) {
         log('ERREUR : ' + error.message);
         status(error.message, 'error');
@@ -276,13 +329,13 @@ async function createOffer() {
 async function createAnswer(offer) {
     try {
         closePeer();
-        $('output').value = '';
+        resetZone();
         $('candidates').textContent = 'Collecte ICE...';
         status('Traitement de l’offre reçue...');
 
         createPeer();
 
-        await pc.setRemoteDescription({ type: 'offer', sdp: offer.sdp });
+        await pc.setRemoteDescription({ type: 'offer', sdp: offer.s });
         log('Offre distante enregistrée.');
 
         const answer = await pc.createAnswer();
@@ -292,8 +345,8 @@ async function createAnswer(offer) {
         status('Collecte des candidats ICE...');
 
         await waitForIce();
-        exportDescription('answer');
-        status('Réponse prête. Transmets le JSON au client A.');
+        await exportLink('answer');
+        status('Lien prêt. Glisse-le sur la zone du client A.');
     } catch (error) {
         log('ERREUR : ' + error.message);
         status(error.message, 'error');
@@ -306,7 +359,7 @@ async function applyAnswer(answer) {
             throw new Error('Aucune offre locale en attente.');
         }
 
-        await pc.setRemoteDescription({ type: 'answer', sdp: answer.sdp });
+        await pc.setRemoteDescription({ type: 'answer', sdp: answer.s });
         log('Réponse distante enregistrée.');
         status('Réponse reçue. Négociation ICE en cours.');
     } catch (error) {
@@ -315,24 +368,19 @@ async function applyAnswer(answer) {
     }
 }
 
-async function processInput() {
+// Traite un texte contenant un lien (déposé, collé ou ouvert)
+async function processText(text) {
     try {
-        const raw = $('input').value.trim();
-        if (!raw) throw new Error('Aucun JSON fourni.');
+        const payload = extractPayload(text);
+        if (!payload) throw new Error('Aucun lien P2P reconnu.');
 
-        const data = JSON.parse(raw);
+        const data = await unpack(payload);
 
-        if (data.protocol !== 'P2P-WEBRTC' ||
-            data.version !== 1 ||
-            typeof data.sdp !== 'string') {
-            throw new Error('Format JSON non reconnu.');
+        if (typeof data.s !== 'string' || !['offer', 'answer'].includes(data.t)) {
+            throw new Error('Lien invalide.');
         }
 
-        if (!['offer', 'answer'].includes(data.type)) {
-            throw new Error('Type SDP inconnu.');
-        }
-
-        if (data.type === 'offer') await createAnswer(data);
+        if (data.t === 'offer') await createAnswer(data);
         else await applyAnswer(data);
     } catch (error) {
         log('ERREUR : ' + error.message);
@@ -340,21 +388,13 @@ async function processInput() {
     }
 }
 
-async function copyOutput() {
-    const text = $('output').value;
-    if (!text) {
-        status('Aucun JSON à copier.', 'error');
-        return;
-    }
-
+async function copyLink() {
+    const url = $('link').href;
     try {
-        await navigator.clipboard.writeText(text);
-        status('JSON copié dans le presse-papiers.', 'ok');
+        await navigator.clipboard.writeText(url);
+        status('Lien copié dans le presse-papiers.', 'ok');
     } catch {
-        $('output').focus();
-        $('output').select();
-        document.execCommand('copy');
-        status('JSON sélectionné : copie manuelle possible.');
+        status('Copie impossible : glisse le lien à la place.', 'error');
     }
 }
 
@@ -371,14 +411,84 @@ function sendMessage() {
     }
 }
 
+/* ---------- Évènements ---------- */
+
 $('createOffer').addEventListener('click', createOffer);
-$('process').addEventListener('click', processInput);
-$('copy').addEventListener('click', copyOutput);
+$('copy').addEventListener('click', copyLink);
 $('send').addEventListener('click', sendMessage);
 $('message').addEventListener('keydown', event => {
     if (event.key === 'Enter') sendMessage();
 });
 $('clearLog').addEventListener('click', () => $('log').textContent = '');
+
+// Un clic sur le lien ne doit pas naviguer
+$('link').addEventListener('click', event => event.preventDefault());
+
+// Glisser le lien généré vers l'autre client
+$('link').addEventListener('dragstart', event => {
+    selfDrag = true;
+    const url = $('link').href;
+    event.dataTransfer.setData('text/uri-list', url);
+    event.dataTransfer.setData('text/plain', url);
+    event.dataTransfer.effectAllowed = 'copy';
+});
+$('link').addEventListener('dragend', () => { selfDrag = false; });
+
+// Zone de dépôt unique
+const dropZone = $('dropZone');
+
+['dragenter', 'dragover'].forEach(type => {
+    dropZone.addEventListener(type, event => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        if (!selfDrag) dropZone.classList.add('drag-over');
+    });
+});
+
+['dragleave', 'dragend'].forEach(type => {
+    dropZone.addEventListener(type, event => {
+        event.preventDefault();
+        dropZone.classList.remove('drag-over');
+    });
+});
+
+dropZone.addEventListener('drop', event => {
+    event.preventDefault();
+    dropZone.classList.remove('drag-over');
+
+    // On ignore un dépôt de notre propre lien sur notre zone
+    if (selfDrag) return;
+
+    const raw = (event.dataTransfer.getData('text/uri-list') ||
+                 event.dataTransfer.getData('text/plain') || '').trim();
+
+    if (!raw) {
+        status('Aucun lien détecté dans le dépôt.', 'error');
+        return;
+    }
+
+    log('Lien reçu par glisser-déposer.');
+    processText(raw);
+});
+
+// Alternative : coller le lien avec Ctrl+V
+document.addEventListener('paste', event => {
+    if (event.target.id === 'message') return;
+    const text = event.clipboardData.getData('text/plain');
+    if (extractPayload(text)) {
+        event.preventDefault();
+        log('Lien reçu par collage.');
+        processText(text);
+    }
+});
+
+// Alternative : lien ouvert directement dans le navigateur
+if (location.hash.startsWith(HASH_KEY)) {
+    const hash = location.hash;
+    history.replaceState(null, '', location.pathname + location.search);
+    log('Lien reçu par ouverture directe.');
+    processText(hash);
+}
 
 log('Client WebRTC initialisé.');
 log('STUN configuré : ' + STUN.urls);
