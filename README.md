@@ -15,6 +15,8 @@ Quelques fichiers html autonomes pour des petits usages / besoins ...
  - [🕵 Laya ](https://jpcrevoisier.github.io/laya/)
  - [🕵 KolibriOS ](https://jpcrevoisier.github.io/kolibrios/)
  - [📥 Drop inspector ](https://jpcrevoisier.github.io/drop/)
+ - [📥 WebRTC ](https://jpcrevoisier.github.io/webrtc/)
+ - [📥 gppd ](https://jpcrevoisier.github.io/gddp/)
  
 
 Le push depuis windows ... 
