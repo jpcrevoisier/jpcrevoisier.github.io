@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Neoviz Filesystem</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <header>
+        <h1>Filesystem</h1>
+        <div>
+            <input id="token" type="password" placeholder="API Token">
+            <button id="connect">Connexion</button>
+        </div>
+    </header>
+
+    <main>
+        <nav id="breadcrumb">Racine</nav>
+
+        <section id="dropzone">
+            <strong>Déposer les fichiers ici</strong>
+            <span>ou cliquer pour sélectionner</span>
+            <input type="file" id="upload" multiple hidden>
+        </section>
+
+        <div class="toolbar">
+            <button id="new-folder">Nouveau dossier</button>
+            <button id="refresh">Actualiser</button>
+        </div>
+
+        <div id="status"></div>
+        <section id="files"></section>
+    </main>
+
+    <dialog id="preview">
+        <button id="close-preview">Fermer</button>
+        <div id="preview-content"></div>
+    </dialog>
+
+    <script src="assets/app.js"></script>
+</body>
+</html>

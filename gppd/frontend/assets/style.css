@@ -1,0 +1,142 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f3f5f7;
+    color: #303943;
+}
+
+header {
+    background: #194979;
+    color: white;
+    padding: 18px 5%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 22px;
+}
+
+main {
+    max-width: 1100px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+input, button {
+    padding: 9px 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+button {
+    cursor: pointer;
+    background: white;
+}
+
+button:hover {
+    background: #e7eef5;
+}
+
+#breadcrumb {
+    margin-bottom: 20px;
+}
+
+#breadcrumb button {
+    border: none;
+    background: transparent;
+    color: #194979;
+}
+
+#dropzone {
+    border: 2px dashed #8ba1b5;
+    border-radius: 8px;
+    padding: 35px;
+    text-align: center;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    cursor: pointer;
+}
+
+#dropzone.dragover {
+    background: #e2f0ff;
+    border-color: #194979;
+}
+
+.toolbar {
+    margin: 20px 0;
+    display: flex;
+    gap: 10px;
+}
+
+#files {
+    display: grid;
+    gap: 8px;
+}
+
+.file {
+    background: white;
+    padding: 13px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.file > span:nth-child(2) {
+    flex: 1;
+    overflow-wrap: anywhere;
+}
+
+.file div {
+    display: flex;
+    gap: 5px;
+}
+
+#status {
+    margin: 15px 0;
+    color: #515150;
+}
+
+dialog {
+    width: min(90vw, 1000px);
+    height: 85vh;
+    border: none;
+    border-radius: 8px;
+}
+
+dialog::backdrop {
+    background: #0009;
+}
+
+#preview-content {
+    height: calc(100% - 45px);
+}
+
+#preview-content img,
+#preview-content iframe {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border: none;
+}
+
+@media(max-width: 650px) {
+    header, .file {
+        flex-wrap: wrap;
+    }
+
+    .file div {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+}
