@@ -1,0 +1,14 @@
+﻿{
+  "name": "GH Notes",
+  "short_name": "GH Notes",
+  "description": "Éditeur de notes Markdown synchronisé avec un dépôt GitHub",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1e1e2e",
+  "theme_color": "#1e1e2e",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
+

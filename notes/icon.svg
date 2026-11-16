@@ -1,0 +1,8 @@
+﻿<!-- Icône de l'application -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1e1e2e"/>
+  <rect x="136" y="96" width="240" height="320" rx="24" fill="#7aa2f7"/>
+  <rect x="176" y="156" width="160" height="16" rx="8" fill="#1e1e2e"/>
+  <rect x="176" y="204" width="160" height="16" rx="8" fill="#1e1e2e"/>
+  <rect x="176" y="252" width="110" height="16" rx="8" fill="#1e1e2e"/>
+</svg>
